@@ -261,7 +261,8 @@ DumpState = attrdict (
     defo={'state': 'selected',
           'prevrun': -1,
           'raw_size': -1,
-          'comp_size': -1})
+          'comp_size': -1,
+          'nfiles': -1})
 
 
 # DumpEstimate:
@@ -531,7 +532,8 @@ class Journal :
         'DUMP-FINISHED': (('disk',  's'),
                           ('state', 's'),
                           ('raw_size', 'i'),
-                          ('comp_size', 'i')),
+                          ('comp_size', 'i'),
+                          ('nfiles',    'i')),
     }
 
     
@@ -574,7 +576,8 @@ class Journal :
         elif key == 'DUMP-FINISHED' :
             s.dumps[kw['disk']].update(state=kw['state'],
                                        raw_size=kw['raw_size'],
-                                       comp_size=kw['comp_size'])
+                                       comp_size=kw['comp_size'],
+                                       nfiles=kw['nfiles'])
         else :
             assert 0, (key, kw)
         # trace("JOURNAL UPDATE: %s\n%s" %
@@ -977,13 +980,16 @@ class MBDumpApp :
         # collect datas about the dump
         raw_size = p_dump.data_size
         comp_size = data_plug.data_size
+        nfiles = index.count
         # all done
         self.journal.record('DUMP-FINISHED',
                             disk=dsched.disk, state='ok',
-                            raw_size=raw_size, comp_size=comp_size)
-        trace("dump OK: %s (%s/%s)" % (dsched.disk,
-                                       human_size(raw_size),
-                                       human_size(comp_size)))
+                            raw_size=raw_size, comp_size=comp_size,
+                            nfiles=nfiles)
+        trace("dump OK: %s (%s/%s, %d files)" % (dsched.disk,
+                                                 human_size(raw_size),
+                                                 human_size(comp_size),
+                                                 nfiles))
 
 
     # __index_handler:
