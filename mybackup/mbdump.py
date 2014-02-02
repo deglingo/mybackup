@@ -756,6 +756,33 @@ class DumperTar :
         return proc
 
 
+# Index:
+#
+class Index :
+
+
+    # __init__:
+    #
+    def __init__ (self, fname) :
+        self.fname = fname
+        self.f = open(self.fname, 'wt')
+        self.count = 0
+
+
+    # __call__:
+    #
+    def __call__ (self, line) :
+        trace("INDEX: %s" % line.rstrip())
+        self.f.write(line)
+        self.count += 1
+
+
+    # close:
+    #
+    def close (self) :
+        self.f.close()
+
+
 # MBDumpApp:
 #
 class MBDumpApp :
@@ -908,7 +935,7 @@ class MBDumpApp :
         pipes = []
         # open dest file and index
         fdest = open(destfull, 'wb')
-        findex = open('/dev/null', 'wt')
+        index = Index('/dev/null')
         # filters
         filters = [cmdexec(['gzip'], stdin=CMDPIPE, stdout=CMDPIPE)]
         # start the dumper
@@ -920,8 +947,7 @@ class MBDumpApp :
         proc_index = dumper.start_index()
         procs.append(proc_index)
         p_dump.plug_output(proc_index.stdin)
-        p_index = PipeThread('index', proc_index.stdout, (),
-                             line_handler=partial(self.__index_handler, findex))
+        p_index = PipeThread('index', proc_index.stdout, (), line_handler=index)
         pipes.append(p_index)
         # plug the filters
         data_plug = p_dump
@@ -947,7 +973,7 @@ class MBDumpApp :
             assert r == 0, r # [todo]
         # close files
         fdest.close()
-        findex.close()
+        index.close()
         # collect datas about the dump
         raw_size = p_dump.data_size
         comp_size = data_plug.data_size
