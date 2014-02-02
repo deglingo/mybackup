@@ -140,7 +140,8 @@ def cmdexec (cmd, **kw) :
 
 # Dates and time stamps
 #
-RE_HRS = re.compile(r'^[0-9]{14}$')
+RE_HRS = re.compile(r'^\d{14}$')
+RE_DATE = re.compile(r'^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}$')
 
 
 # check_stamp:
@@ -159,11 +160,28 @@ def check_hrs (hrs) :
     return hrs
 
 
+# check_date:
+#
+def check_date (date) :
+    assert isinstance(date, str)
+    assert RE_DATE.match(date)
+    return date
+
+
 # stamp2hrs:
 #
 def stamp2hrs (stamp) :
     check_stamp(stamp)
-    return check_hrs(time.strftime('%Y%m%d%H%M%S', time.localtime(stamp)))
+    return check_hrs(time.strftime('%Y%m%d%H%M%S',
+                                   time.localtime(stamp)))
+
+
+# stamp2date:
+#
+def stamp2date (stamp) :
+    check_stamp(stamp)
+    return check_date(time.strftime('%Y/%m/%d %H:%M:%S',
+                                    time.localtime(stamp)))
 
 
 # attrdict:
@@ -321,6 +339,7 @@ class PipeThread :
 class Config :
 
 
+    start_date = property(lambda self: stamp2date(self.start_stamp))
     start_hrs = property(lambda self: stamp2hrs(self.start_stamp))
 
     
@@ -344,6 +363,7 @@ class Config :
         self.journalfile = os.path.join(self.journaldir, 'journal.txt')
         self.dumpdir = os.path.join(self.cfgvardir, 'dumps')
         self.partdir = os.path.join(self.dumpdir, 'partial')
+        self.logdir = os.path.join(self.cfgvardir, 'log')
         # read the config file
         self.cfgfile = os.path.join(self.cfgdir, 'mybackup.conf')
         trace("reading config file: '%s'" % self.cfgfile)
@@ -678,6 +698,10 @@ class MBDumpApp :
         _mkdir(self.config.journaldir)
         _mkdir(self.config.dumpdir)
         _mkdir(self.config.partdir)
+        _mkdir(self.config.logdir)
+        # open the logfile and say something
+        self.__open_logfile()
+        trace("started at %s" % self.config.start_date)
         # [fixme] select disks
         sched = [DiskSched(disk=d.name, cfgdisk=d)
                  for d in self.config.disks.values()]
@@ -695,6 +719,27 @@ class MBDumpApp :
         # console handler
         chdlr = LogConsoleHandler(1)
         logger.addHandler(chdlr)
+
+
+    # __open_logfile:
+    #
+    def __open_logfile (self) :
+        logger = logging.getLogger('mbdump')
+        n, sfx = 0, ''
+        while True :
+            logfile = os.path.join(self.config.logdir, 'mbdump.%s.%s%s.log' %
+                                   (self.config.cfgname, self.config.start_hrs, sfx))
+            try:
+                fd = os.open(logfile, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+            except FileExistsError:
+                n += 1
+                sfx = '.%d' % n
+                continue
+            os.close(fd)
+            break
+        fhdlr = logging.FileHandler(logfile)
+        fhdlr.setLevel(1)
+        logger.addHandler(fhdlr)
 
 
     # __process:
