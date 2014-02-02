@@ -560,6 +560,14 @@ class DB :
     __TABLES = (
         ('runs', (('runid', 'integer primary key autoincrement'),
                   ('hrs',   'text unique'))),
+
+        ('dumps', (('dumpid', 'integer primary key autoincrement'),
+                   ('disk', 'text'),
+                   ('runid', 'references runs(runid)'),
+                   ('state', 'text'),
+                   ('fname', 'text'),
+                   ('raw_size', 'int'),
+                   ('comp_size', 'int'))),
     )
 
 
@@ -631,6 +639,17 @@ class DB :
         assert len(sel) == 1
         trace("run recorded: %d (%s)" % (sel[0].runid, sel[0].hrs))
         return sel[0].runid
+
+
+    # record_dump:
+    #
+    def record_dump (self, disk, runid, state, fname, raw_size, comp_size) :
+        self._execute('insert into dumps ' +
+                      '(disk, runid, state, fname, raw_size, comp_size) ' +
+                      'values (?, ?, ?, ?, ?, ?)',
+                      (disk, runid, state, fname, raw_size, comp_size))
+        self._commit()
+        trace("dump recorded: %s" % disk)
 
 
 # DumperTar:
@@ -845,12 +864,17 @@ class MBDumpApp :
         # process the dumps
         for dump in info.dumps.values() :
             cfgdisk = self.config.disks[dump.disk]
+            # rename the dump file
             destbase = cfgdisk.get_dumpname(hrs=info.hrs)
             destext = cfgdisk.get_dumpext()
             destfull = os.path.join(self.config.dumpdir, destbase+destext)
             partfull = os.path.join(self.config.partdir, dump.fname)
             trace("dump: '%s' -> '%s'" % (partfull, destfull))
             os.rename(partfull, destfull)
+            # record the dump in db
+            self.db.record_dump(disk=cfgdisk.name, runid=info.runid, state=dump.state,
+                                fname=destbase+destext, raw_size=dump.raw_size,
+                                comp_size=dump.comp_size)
 
 
 # exec
