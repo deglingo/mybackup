@@ -682,6 +682,25 @@ class DB :
         self._commit()
 
 
+    # dump:
+    #
+    def dump (self, depth=0) :
+        trace(("  DB DUMP: %s  " % self).center(120, '*'),
+              depth=depth+1)
+        w = sys.stderr.write
+        for tname, tcols in DB.__TABLES :
+            sel = self._execute('select * from %s order by %s' %
+                                (tname, tcols[0][0]))
+            w("%s: %d records\n" % (tname.upper(), len(sel)))
+            if sel :
+                w("  [ %s ]" % ', '.join(sel[0]._fields))
+                w('\n')
+            for row in sel :
+                w("  ( %s )" % ', '.join(str(c) for c in row))
+                w('\n')
+        trace(''.center(120, '*'), depth=depth+1)
+                
+
     # _execute:
     #
     def _execute (self, sql, args=(), commit=True) :
@@ -1013,6 +1032,8 @@ class MBDumpApp :
             self.db.record_dump(disk=cfgdisk.name, runid=info.runid, state=dump.state,
                                 fname=destbase+destext, raw_size=dump.raw_size,
                                 comp_size=dump.comp_size, nfiles=dump.nfiles)
+        # debug
+        self.db.dump()
 
 
 # exec
