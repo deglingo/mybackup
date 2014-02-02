@@ -993,13 +993,6 @@ class MBDumpApp :
                                                  nfiles))
 
 
-    # __index_handler:
-    #
-    def __index_handler (self, findex, line) :
-        trace("INDEX: %s" % line.rstrip())
-        findex.write(line)
-
-
     # __post_process:
     #
     def __post_process (self, info) :
