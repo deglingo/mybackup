@@ -636,7 +636,8 @@ class DB :
                    ('state', 'text'),
                    ('fname', 'text'),
                    ('raw_size', 'int'),
-                   ('comp_size', 'int'))),
+                   ('comp_size', 'int'),
+                   ('nfiles',    'int'))),
     )
 
 
@@ -713,11 +714,11 @@ class DB :
 
     # record_dump:
     #
-    def record_dump (self, disk, runid, state, fname, raw_size, comp_size) :
+    def record_dump (self, disk, runid, state, fname, raw_size, comp_size, nfiles) :
         self._execute('insert into dumps ' +
-                      '(disk, runid, state, fname, raw_size, comp_size) ' +
-                      'values (?, ?, ?, ?, ?, ?)',
-                      (disk, runid, state, fname, raw_size, comp_size))
+                      '(disk, runid, state, fname, raw_size, comp_size, nfiles) ' +
+                      'values (?, ?, ?, ?, ?, ?, ?)',
+                      (disk, runid, state, fname, raw_size, comp_size, nfiles))
         trace("dump recorded: %s" % disk)
 
 
@@ -1018,7 +1019,7 @@ class MBDumpApp :
             # record the dump in db
             self.db.record_dump(disk=cfgdisk.name, runid=info.runid, state=dump.state,
                                 fname=destbase+destext, raw_size=dump.raw_size,
-                                comp_size=dump.comp_size)
+                                comp_size=dump.comp_size, nfiles=dump.nfiles)
 
 
 # exec
