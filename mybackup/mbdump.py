@@ -441,9 +441,13 @@ class CfgDisk :
 
     # get_dumpname:
     #
-    def get_dumpname (self, hrs) :
-        return 'mbdump.%(disk)s.%(hrs)s' % {
+    def get_dumpname (self, runid, level, prevrun, hrs) :
+        return 'mbdump.%(config)s.%(disk)s.%(runid)03d.%(level)d-%(prevrun)03d.%(hrs)s' % {
+            'config': self.config.cfgname,
             'disk': self.name,
+            'runid': runid,
+            'level': level,
+            'prevrun': prevrun,
             'hrs': hrs }
 
     
@@ -817,7 +821,7 @@ class MBDumpApp :
                 if select is None or select.est > e.est :
                     select = e
             trace("selected best estimate: %s" % repr(select))
-            dsched.update(prevrun=e.prev)
+            dsched.update(prevrun=select.prev)
         else :
             trace("no cycle found, forcing full dump")
             dsched.update(prevrun=0)
@@ -911,7 +915,8 @@ class MBDumpApp :
         for dump in info.dumps.values() :
             cfgdisk = self.config.disks[dump.disk]
             # rename the dump file
-            destbase = cfgdisk.get_dumpname(hrs=info.hrs)
+            destbase = cfgdisk.get_dumpname(runid=info.runid, level=9,
+                                            prevrun=dump.prevrun, hrs=info.hrs)
             destext = cfgdisk.get_dumpext()
             destfull = os.path.join(self.config.dumpdir, destbase+destext)
             partfull = os.path.join(self.config.partdir, dump.fname)
