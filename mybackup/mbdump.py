@@ -104,7 +104,7 @@ def _numbered_backup (fname) :
         m = r.match(f)
         if m is None :
             continue
-        n = max(n, m.group('N'))
+        n = max(n, int(m.group('N')))
     while True :
         bak = fname + '.~%d~' % n
         try:
@@ -260,6 +260,13 @@ DumpState = attrdict (
     defo={'state': 'selected',
           'raw_size': -1,
           'comp_size': -1})
+
+
+# DumpEstimate:
+#
+DumpEstimate = collections.namedtuple(
+    'DumpEstimate',
+    ('prev', 'raw', 'comp', 'est'))
 
 
 # PipeThread:
@@ -798,8 +805,29 @@ class MBDumpApp :
         cycle = self.db.get_current_cycle(dsched.disk)
         trace("current cycle: %d dumps:" % len(cycle))
         for d in cycle : trace(" - %s" % repr(d))
+        if cycle :
+            estims = [self.__estim_dump(dsched, None)]
+            estims.extend(self.__estim_dump(dsched, d)
+                          for d in cycle)
+            select = None
+            for e in estims :
+                if select is None or select.est > e.est :
+                    select = e
+            trace("selected best estimate: %s" % repr(select))
+            dsched.update(prevrun=e.prev)
+        else :
+            trace("no cycle found, forcing full dump")
+            dsched.update(prevrun=0)
         self.journal.record('SCHEDULE', disk=dsched.disk)
 
+
+    # __estim_dump:
+    #
+    def __estim_dump (self, dsched, prev) :
+        trace("[TODO] estim(%s, %s)" % (dsched.disk, prev))
+        prevrun = (0 if prev is None else prev.runid)
+        return DumpEstimate(prev=prevrun, raw=100, comp=100, est=100-prevrun)
+            
 
     # __process_dump:
     #

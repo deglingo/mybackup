@@ -37,4 +37,9 @@ test_base_main()
 	sleep 1 # removeme
 	title "DAY 2" 70
 	"$MBDUMP" test
+	
+	# day 3
+	sleep 1 # removeme
+	title "DAY 3" 70
+	"$MBDUMP" test
 }
