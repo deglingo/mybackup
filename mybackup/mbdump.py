@@ -2,8 +2,9 @@
 
 import sys, os, traceback, getopt, json, weakref, collections, time
 import re, sqlite3, shutil, copy, pprint, subprocess, threading
-import logging
+import logging, codecs
 from subprocess import PIPE as CMDPIPE
+from functools import partial
 
 # debug
 # import mybackup as _debug_mybackup
@@ -277,10 +278,19 @@ class PipeThread :
 
     # __init__:
     #
-    def __init__ (self, name, fin, fout, started=False) :
+    def __init__ (self, name, fin, fout, started=False, line_handler=None) :
         self.name = name
         self.fin = fin
         self.fout = list(fout)
+        if line_handler is None :
+            self.line_handler = None
+            self.decoder = None
+        else :
+            self.line_handler = line_handler
+            # [fixme]
+            codec = codecs.getincrementaldecoder('utf-8')
+            self.decoder = codec(errors='replace')
+
         self.start_lock = threading.Lock() # just in case ?
         self.thread = threading.Thread(target=self.run)
         self.alive = True
@@ -331,15 +341,39 @@ class PipeThread :
     def _run (self) :
         #trace("%s: start" % self.name)
         self.data_size = 0
+        if self.line_handler is not None :
+            self.line_buffer = ''
         while True :
             data = self.fin.read(65536)
             if not data : break
             self.data_size += len(data)
             for f in self.fout :
                 f.write(data)
+            if self.line_handler is not None :
+                ldata = self.decoder.decode(data, False)
+                self._process_lines(ldata, False)
+        # flush the line handler
+        if self.line_handler is not None :
+            ldata = self.decoder.decode(b'', True)
+            self._process_lines(ldata, True)
         #trace("%s: EOF" % self.name)
         for f in self.fout :
             f.close()
+
+
+    def _process_lines (self, ldata, final) :
+        lpos = 0
+        while True :
+            i = ldata.find('\n', lpos)
+            if i < 0 :
+                self.line_buffer += ldata[lpos:]
+                break
+            self.line_handler(self.line_buffer + ldata[lpos:i+1])
+            self.line_buffer = ''
+            lpos = i + 1
+        if final and self.line_buffer :
+            self.line_handler(self.line_buffer)
+            self.line_buffer = ''
 
 
 # Config:
@@ -874,10 +908,9 @@ class MBDumpApp :
         pipes = []
         # open dest file and index
         fdest = open(destfull, 'wb')
-        findex = open('/dev/null', 'wb')
+        findex = open('/dev/null', 'wt')
         # filters
-        filters = [cmdexec(['gzip'], stdin=CMDPIPE, stdout=CMDPIPE),
-                   cmdexec(['cat'], stdin=CMDPIPE, stdout=CMDPIPE)]
+        filters = [cmdexec(['gzip'], stdin=CMDPIPE, stdout=CMDPIPE)]
         # start the dumper
         proc_dump = dumper.start(dsched.cfgdisk.path)
         procs.append(proc_dump)
@@ -887,7 +920,8 @@ class MBDumpApp :
         proc_index = dumper.start_index()
         procs.append(proc_index)
         p_dump.plug_output(proc_index.stdin)
-        p_index = PipeThread('index', proc_index.stdout, (findex,))
+        p_index = PipeThread('index', proc_index.stdout, (),
+                             line_handler=partial(self.__index_handler, findex))
         pipes.append(p_index)
         # plug the filters
         data_plug = p_dump
@@ -924,6 +958,13 @@ class MBDumpApp :
         trace("dump OK: %s (%s/%s)" % (dsched.disk,
                                        human_size(raw_size),
                                        human_size(comp_size)))
+
+
+    # __index_handler:
+    #
+    def __index_handler (self, findex, line) :
+        trace("INDEX: %s" % line.rstrip())
+        findex.write(line)
 
 
     # __post_process:
