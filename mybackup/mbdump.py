@@ -2,6 +2,7 @@
 
 import sys, os, traceback, getopt, json, weakref, collections, time
 import re, sqlite3, shutil, copy, pprint, subprocess, threading
+import logging
 from subprocess import PIPE as CMDPIPE
 
 # debug
@@ -24,22 +25,33 @@ OPTIONS:
 
 # trace:
 #
-_trace_lock = threading.Lock()
 _log_locations = bool(os.environ.get('MB_LOG_LOCATIONS', ''))
 
-def _log (f, lvl, msg, depth=0) :
-    prompt = 'mbdump:%s%s' % (lvl, (':' if lvl else ''))
-    if _log_locations :
-        fn, ln, fc, co = traceback.extract_stack()[-(depth+2)]
-        fn = os.path.realpath(fn)
-        prompt += '%s:%d:%s:' % (fn, ln, fc)
-    prompt += ' '
-    with _trace_lock :
-        f.write("%s%s\n" % (prompt, msg))
-        f.flush()
+def _log (lvl, msg, depth=0) :
+    logger = logging.getLogger('mbdump')
+    fn, ln, fc, co = traceback.extract_stack()[-(depth+2)]
+    fn = os.path.realpath(fn)
+    r = logger.makeRecord('mbdump', lvl, fn=fn, lno=ln,
+                          msg=msg, args=(), exc_info=None,
+                          func=fn, extra=None, sinfo=None)
+    logger.handle(r)
         
-def trace (msg, depth=0) : _log(sys.stdout, '', msg, depth=depth+1)
-def error (msg, depth=0) : _log(sys.stderr, 'ERROR', msg, depth=depth+1)
+def trace (msg, depth=0) : _log(logging.DEBUG, msg, depth=depth+1)
+def error (msg, depth=0) : _log(logging.ERROR, msg, depth=depth+1)
+
+
+# LogConsoleHandler:
+#
+class LogConsoleHandler (logging.Handler) :
+
+
+    # emit:
+    #
+    def emit (self, r) :
+        msg = self.format(r)
+        sys.stderr.write(msg)
+        sys.stderr.write('\n')
+        sys.stderr.flush()
 
 
 # format_exception:
@@ -646,6 +658,7 @@ class MBDumpApp :
     # __main:
     #
     def __main (self) :
+        self.__setup_logger()
         self.config = Config()
         # parse the command line
         shortopts = 'h'
@@ -672,6 +685,16 @@ class MBDumpApp :
         self.__process(sched)
         # cleanup
         self.__post_process(self.journal.summary())
+
+
+    # __setup_logger:
+    #
+    def __setup_logger (self) :
+        logger = logging.getLogger('mbdump')
+        logger.setLevel(1)
+        # console handler
+        chdlr = LogConsoleHandler(1)
+        logger.addHandler(chdlr)
 
 
     # __process:
