@@ -633,6 +633,7 @@ class DB :
         ('dumps', (('dumpid', 'integer primary key autoincrement'),
                    ('disk', 'text'),
                    ('runid', 'references runs(runid)'),
+                   ('prevrun', 'references runs(runid)'),
                    ('state', 'text'),
                    ('fname', 'text'),
                    ('raw_size', 'int'),
@@ -733,11 +734,11 @@ class DB :
 
     # record_dump:
     #
-    def record_dump (self, disk, runid, state, fname, raw_size, comp_size, nfiles) :
+    def record_dump (self, disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles) :
         self._execute('insert into dumps ' +
-                      '(disk, runid, state, fname, raw_size, comp_size, nfiles) ' +
-                      'values (?, ?, ?, ?, ?, ?, ?)',
-                      (disk, runid, state, fname, raw_size, comp_size, nfiles))
+                      '(disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles) ' +
+                      'values (?, ?, ?, ?, ?, ?, ?, ?)',
+                      (disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles))
         trace("dump recorded: %s" % disk)
 
 
@@ -1029,7 +1030,8 @@ class MBDumpApp :
             trace("dump: '%s' -> '%s'" % (partfull, destfull))
             os.rename(partfull, destfull)
             # record the dump in db
-            self.db.record_dump(disk=cfgdisk.name, runid=info.runid, state=dump.state,
+            self.db.record_dump(disk=cfgdisk.name, runid=info.runid,
+                                prevrun=dump.prevrun, state=dump.state,
                                 fname=destbase+destext, raw_size=dump.raw_size,
                                 comp_size=dump.comp_size, nfiles=dump.nfiles)
         # debug
