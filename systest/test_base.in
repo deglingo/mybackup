@@ -1,0 +1,38 @@
+#!@SHELL@
+# -*- shell-script -*-
+
+
+# setup
+#
+test_base_setup()
+{
+	st_mkfile "/etc/mybackup/test/mybackup.conf" - <<EOF
+{
+  "disks": {
+    "HOME": {
+      "path": "$ST_ROOTDIR/home/bob"
+    }
+  }
+}
+EOF
+
+	st_mkfile "/home/bob/FILE1" - <<EOF
+Lots of data...
+EOF
+}
+
+
+# main
+#
+test_base_main()
+{
+	trace "MBDUMP: '$MBDUMP' (`which $MBDUMP`)"
+	"$MBDUMP" --help >"$ST_ROOTDIR/tmp/mbdump-help.txt"
+	
+	# day 1
+	"$MBDUMP" test
+	
+	# day 2
+	sleep 1 # removeme
+	"$MBDUMP" test
+}

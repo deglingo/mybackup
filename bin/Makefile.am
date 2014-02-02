@@ -1,0 +1,3 @@
+#
+
+bin_SCRIPTS = mbdump

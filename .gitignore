@@ -1,0 +1,10 @@
+*~
+ChangeLog
+Makefile.in
+COPYING
+INSTALL
+aclocal.m4
+autom4te.cache
+configure
+install-sh
+missing

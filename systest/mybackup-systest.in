@@ -1,0 +1,228 @@
+#!@SHELL@
+# -*- shell-script -*-
+
+set -eu
+
+
+BUILDDIR=`readlink -e '@abs_top_builddir@/systest'`
+
+ST_SRCDIR=`readlink -e '@abs_top_srcdir@'`
+
+ST_BUILDDIR="$BUILDDIR/st-build"
+ST_ROOTDIR="$BUILDDIR/st-root"
+ST_SAVEDIR="$BUILDDIR/st-save"
+
+MB_SYSTEST_MODULES='@MB_SYSTEST_MODULES@'
+
+
+# trace:
+_MYPID=$$
+DOMAIN="mybackup-systest"
+_log()
+{
+	# don't use getopt which can be fooled by weird messages
+	local n=0 c=0 l= msg=
+	while test $# -gt 0; do
+		case "$1" in
+			-*) local o="${1:1}"
+				while test x"$o" != x; do
+					case "${o:0:1}" in
+						c) c=1; o="${o:1}";;
+						n) n=1; o="${o:1}";;
+						l) l="${o:1}"; o="";
+							test x"$l" != x || {
+								l="$2"; shift; };;
+						*) die "invalid option: -$o";;
+					esac
+				done
+				;;
+			*) test x"$msg" = x && msg="${1}" || msg="${msg} ${1}";;
+		esac
+		shift
+	done
+	local fmt=
+	test $c -ne 0 || {
+		fmt="${fmt}${DOMAIN}:";
+		test x"$l" = x || fmt="${fmt}${l}:";
+		fmt="${fmt} "; }
+	fmt="${fmt}%s"
+	test $n -ne 0 || fmt="${fmt}\n"
+	printf "$fmt" "$msg"
+}
+trace() { test x"${DEBUG:-}" = x || _log -lDEBUG "${@}"; }
+info() { _log ${@}; }
+error() { _log -lERROR "${@}" >&2; }
+die() { _log -lFATAL "${@}" >&2; exit 1; }
+
+
+# isin ITEM LIST
+isin()
+{
+	local i="$1" i2; shift; local l="$@"
+	for i2 in $l; do
+		test x"$i" != x"$i2" || return 0
+	done
+	return 1
+}
+
+
+# _sync
+_sync()
+{
+	local src="$1" dest="$2"
+	trace "sync: '$src' -> '$dest'"
+	test -d "$dest" || mkdir "$dest"
+	rsync -a --delete --delete-excluded "$src"/. "$dest" \
+		|| die "rsync failed"
+}
+
+
+# main:
+main()
+{
+	local mod errs=0 nruns=0 errlist=
+	global_setup
+	for mod in $MB_SYSTEST_MODULES; do
+		nruns=`expr $nruns + 1`
+		info -n " - $mod ... "
+		if run_module "$mod"; then
+			info -c "OK"
+		else
+			info -c "FAILED!"
+			errs=`expr $errs + 1`
+			errlist="$errlist $mod"
+		fi
+	done
+	local sep1=`for i in {1..70}; do echo -n '='; done`
+	local sep2=`for i in {1..70}; do echo -n '.'; done`
+	local r
+	info "$sep1"
+	if [ $errs -eq 0 ]; then
+		r=0
+		info "TEST RESULT: PASS ($nruns modules)"
+	else
+		r=1
+		info "TEST RESULT: FAILED!! ($errs errors on $nruns modules)"
+	fi
+	for mod in $MB_SYSTEST_MODULES; do
+		local mr=1; isin $mod $errlist || mr=0
+		if [ ${VERBOSE:-0} -ne 0 -o $mr -ne 0 ]; then
+			info "$sep1"
+			test $mr -eq 0 && info "SUCCESS: '$mod'" || info "FAILURE: '$mod'"
+			info "$sep2"
+			cat "$mod.log"
+		fi
+	done
+	info "$sep1"
+	return $r
+}
+
+
+global_setup()
+{
+	local oldpwd=`pwd`
+	trace "global setup"
+	local log="build.log"
+	# build the package
+	rm -rf "$ST_ROOTDIR"
+	test -d "$ST_BUILDDIR" || mkdir "$ST_BUILDDIR"
+	cd "$ST_BUILDDIR"
+	test -f Makefile || {
+		"$ST_SRCDIR"/configure --prefix "$ST_ROOTDIR" --exec-prefix "$ST_ROOTDIR"/usr >/dev/null \
+		|| die "configure failed"; }
+	make >/dev/null || die "make failed"
+	make install >/dev/null || die "make install failed"
+	# create some dirs
+	cd "$ST_ROOTDIR"
+	mkdir tmp
+	# save the rootdir
+	_sync "$ST_ROOTDIR" "$ST_SAVEDIR"
+	cd "$oldpwd"
+}
+
+
+run_module()
+{
+	local mod="$1" log="$1.log" r=0
+	( _run_module "$mod"; ) >"$log" 2>&1 || return $?
+	return 0
+}
+
+_run_module()
+{
+	local mod="$1"
+
+	# setup
+	_sync "$ST_SAVEDIR" "$ST_ROOTDIR"
+	DOMAIN="$mod"
+	MBDUMP="$ST_ROOTDIR/usr/bin/mbdump"
+	export PATH="$ST_ROOTDIR/usr/bin:/usr/bin:/bin"
+	export PYTHONPATH="$ST_ROOTDIR/usr/lib/python@PYTHON_VERSION@/site-packages"
+
+	cd "$ST_ROOTDIR"
+	. "$BUILDDIR/$mod" || die "source '$mod' failed"
+	cd "$ST_ROOTDIR"
+	eval "${mod}_setup" || die "setup '$mod' failed"
+	cd "$ST_ROOTDIR"
+	eval "${mod}_main" || die "main '$mod' failed"
+}
+
+
+# tools
+st_mkfile()
+{
+	local fname src=
+	local opts=`getopt -o '' -- "${@}"` || die
+	eval set -- "$opts"
+	while true; do
+		case "$1" in
+			--) shift;
+				test $# -ge 1 && fname="$1" \
+					|| die "st_mkfile: filename required"
+				test $# -lt 2 || src="$2"
+				test $# -lt 3 || die "st_mkfile: too many args"
+				break;;
+			*) die "oups: $1"
+		esac
+	done
+	test x"${fname:0:1}" = x"/" \
+		|| die "st_mkfile: fname must be absolute ($fname)"
+	local dirname=`dirname "$fname"`
+	test x"$dirname" = x"/" || st_mkdir "$dirname"
+	local absname="${ST_ROOTDIR}${fname}"
+	trace "creating file: '$fname' ($absname)"
+	case "$src" in
+		'') ;;
+		-) cat >"$absname";;
+		*) die "[todo] $src";;
+	esac
+}
+
+st_mkdir()
+{
+	local dname
+	local opts=`getopt -o '' -- "${@}"` || die
+	eval set -- "$opts"
+	while true; do
+		case "$1" in
+			--) shift;
+				test $# -ge 1 && dname="$1" \
+					|| die "st_mkdir: dirname required"
+				test $# -lt 2 || die "st_mkdir: too many args"
+				break;;
+			*) die "oups: $1"
+		esac
+	done
+	test x"${dname:0:1}" = x"/" \
+		|| die "st_mkdir: dirname must be absolute ($dname)"
+	local parent=`dirname "$dname"`
+	test x"$parent" = x"/" || st_mkdir "$parent"
+	local absname="${ST_ROOTDIR}${dname}"
+	test -d "$absname" || {
+		trace "creating directory: '$dname' ($absname)"
+		mkdir "$absname"; }
+}
+
+
+# exec
+main ${@:-}

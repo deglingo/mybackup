@@ -1,0 +1,8 @@
+# -*- shell-script -*-
+
+echo "autogen: bootstraping package..."
+touch ChangeLog # ?
+aclocal || exit 1
+automake --add-missing || exit 1
+autoconf || exit 1
+echo "autogen: all done!"
