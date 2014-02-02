@@ -258,6 +258,7 @@ DumpState = attrdict (
     'DumpState',
     (),
     defo={'state': 'selected',
+          'prevrun': -1,
           'raw_size': -1,
           'comp_size': -1})
 
@@ -465,7 +466,8 @@ class Journal :
                    
         'SELECT': (('disks', 's'),),
 
-        'SCHEDULE': (('disk', 's'),),
+        'SCHEDULE': (('disk',    's'),
+                     ('prevrun', 'i')),
 
         'DUMP-START':    (('disk',  's'),
                           ('fname', 's')),
@@ -508,7 +510,8 @@ class Journal :
             for d in kw['disks'].split(',') :
                 s.dumps[d] = DumpState(disk=d)
         elif key == 'SCHEDULE' :
-            s.dumps[kw['disk']].update(state='scheduled')
+            s.dumps[kw['disk']].update(state='scheduled',
+                                       prevrun=kw['prevrun'])
         elif key == 'DUMP-START' :
             s.dumps[kw['disk']].update(state='started',
                                        fname=kw['fname'])
@@ -818,7 +821,8 @@ class MBDumpApp :
         else :
             trace("no cycle found, forcing full dump")
             dsched.update(prevrun=0)
-        self.journal.record('SCHEDULE', disk=dsched.disk)
+            
+        self.journal.record('SCHEDULE', disk=dsched.disk, prevrun=dsched.prevrun)
 
 
     # __estim_dump:
