@@ -66,6 +66,31 @@ isin()
 }
 
 
+# center TEXT WIDTH [SEP]
+center()
+{
+	local t="$1" w="$2" s="${3:- }" f=0
+	while test ${#t} -lt $w; do
+		test $f -eq 0 \
+			&& { t="${t}${s}"; f=1; } \
+			|| { t="${s}${t}"; f=0; }
+	done
+	echo "$t"
+}
+
+
+# title TEXT WIDTH
+title()
+{
+	local s=`center '' $2 '*'`
+	local w2=`expr $2 - 4` || true
+	local t=`center "$1" $w2`
+	echo "$s"
+	echo "* $t *"
+	echo "$s"
+}
+
+
 # _sync
 _sync()
 {

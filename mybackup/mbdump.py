@@ -614,13 +614,14 @@ class DB :
 
     # _execute:
     #
-    def _execute (self, sql, args=(), commit=False) :
+    def _execute (self, sql, args=(), commit=True) :
         cur = self.con.cursor()
         #trace("SQL: %s" % sql)
         cur.execute(sql, args)
         r = list(cur.fetchall())
         if commit :
             self._commit()
+        cur.close()
         return r
 
 
@@ -648,8 +649,18 @@ class DB :
                       '(disk, runid, state, fname, raw_size, comp_size) ' +
                       'values (?, ?, ?, ?, ?, ?)',
                       (disk, runid, state, fname, raw_size, comp_size))
-        self._commit()
         trace("dump recorded: %s" % disk)
+
+
+    # get_current_cycle:
+    #
+    def get_current_cycle (self, disk) :
+        sel = self._execute('select * from dumps ' +
+                            'where disk == ? ' +
+                            'order by runid desc',
+                            (disk,))
+        trace("get_cycle(%s) -> %s" % (disk, sel))
+        return sel
 
 
 # DumperTar:
@@ -784,6 +795,9 @@ class MBDumpApp :
     #
     def __schedule_dump (self, dsched) :
         trace("schedule %s" % dsched)
+        cycle = self.db.get_current_cycle(dsched.disk)
+        trace("current cycle: %d dumps:" % len(cycle))
+        for d in cycle : trace(" - %s" % repr(d))
         self.journal.record('SCHEDULE', disk=dsched.disk)
 
 

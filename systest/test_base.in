@@ -30,9 +30,11 @@ test_base_main()
 	"$MBDUMP" --help >"$ST_ROOTDIR/tmp/mbdump-help.txt"
 	
 	# day 1
+	title "DAY 1" 70
 	"$MBDUMP" test
 	
 	# day 2
 	sleep 1 # removeme
+	title "DAY 2" 70
 	"$MBDUMP" test
 }
