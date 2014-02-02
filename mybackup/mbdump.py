@@ -458,6 +458,24 @@ class CfgDisk :
         return '.tgz'
 
 
+    # run_hooks:
+    #
+    def run_hooks (self, trigger) :
+        for hook in self.hooks :
+            if hook[0] != trigger :
+                continue
+            # [fixme]
+            args = {
+                'config': self.config.cfgname,
+                'disk': self.name,
+                'orig': self.orig,
+                'path': self.path,
+            }
+            cmd = [a % args for a in hook[1:]]
+            trace("run hook: %s:%s" % (self.name, trigger))
+            cmdexec(cmd, cwd=self.config.cfgdir)
+
+
 # Journal:
 #
 class Journal :
@@ -799,6 +817,8 @@ class MBDumpApp :
         self.journal.record('SELECT', disks=','.join(s.disk for s in sched))
         # schedule the dumps
         for dsched in sched :
+            dsched.cfgdisk.run_hooks('schedule')
+        for dsched in sched :
             self.__schedule_dump(dsched)
         # run
         for dsched in sched :
@@ -834,7 +854,7 @@ class MBDumpApp :
     def __estim_dump (self, dsched, prev) :
         trace("[TODO] estim(%s, %s)" % (dsched.disk, prev))
         prevrun = (0 if prev is None else prev.runid)
-        return DumpEstimate(prev=prevrun, raw=100, comp=100, est=100-prevrun)
+        return DumpEstimate(prev=prevrun, raw=100, comp=100, est=prevrun*10)
             
 
     # __process_dump:

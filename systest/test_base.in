@@ -10,10 +10,21 @@ test_base_setup()
 {
   "disks": {
     "HOME": {
-      "path": "$ST_ROOTDIR/home/bob"
+      "orig": "$ST_ROOTDIR/somewhere/else/home/bob",
+      "path": "$ST_ROOTDIR/home/bob",
+      "hooks": [["schedule", "./HOOK", "%(config)s", "%(disk)s", "%(orig)s", "%(path)s"]]
     }
   }
 }
+EOF
+
+	st_mkfile -m755 "/etc/mybackup/test/HOOK" - <<EOF
+#!/bin/sh
+echo "HOOK: \$# ARGS:"
+for A in \$@; do
+  echo " - '\$A'"
+done
+echo "HOOK: ALL DONE!"
 EOF
 
 	st_mkfile "/home/bob/FILE1" - <<EOF

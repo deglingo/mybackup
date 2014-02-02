@@ -196,11 +196,12 @@ _run_module()
 # tools
 st_mkfile()
 {
-	local fname src=
-	local opts=`getopt -o '' -- "${@}"` || die
+	local fname src= mode=
+	local opts=`getopt -o 'm:' -- "${@}"` || die
 	eval set -- "$opts"
 	while true; do
 		case "$1" in
+			-m) mode="$2"; shift 2;;
 			--) shift;
 				test $# -ge 1 && fname="$1" \
 					|| die "st_mkfile: filename required"
@@ -221,6 +222,7 @@ st_mkfile()
 		-) cat >"$absname";;
 		*) die "[todo] $src";;
 	esac
+	test x"$mode" = x || chmod "$mode" "$absname"
 }
 
 st_mkdir()
