@@ -2,7 +2,7 @@
 
 import sys, os, traceback, getopt, json, weakref, collections, time
 import re, sqlite3, shutil, copy, pprint, subprocess, threading
-import logging, codecs
+import logging, codecs, types
 from subprocess import PIPE as CMDPIPE
 from functools import partial
 
@@ -39,6 +39,76 @@ def _log (lvl, msg, depth=0) :
         
 def trace (msg, depth=0) : _log(logging.DEBUG, msg, depth=depth+1)
 def error (msg, depth=0) : _log(logging.ERROR, msg, depth=depth+1)
+
+
+# Log levels:
+#
+class LogLevel :
+
+
+    __levels = {}
+    __byname = {}
+
+    
+    # register:
+    #
+    @staticmethod
+    def register (lvl, name, iserr) :
+        assert lvl not in LogLevel.__levels, lvl
+        assert name not in LogLevel.__byname, name
+        linfo = types.MappingProxyType({'level': lvl,
+                                        'name': name,
+                                        'iserr': iserr})
+        LogLevel.__levels[lvl] = LogLevel.__byname[name] = linfo
+
+
+    # list_levels:
+    #
+    @staticmethod
+    def list_levels () :
+        return [l['level'] for l in LogLevel.__levels.values()]
+
+
+    # by_level:
+    #
+    @staticmethod
+    def by_level (lvl) :
+        return LogLevel.__levels[lvl]
+
+
+# Register levels
+LogLevel.register(logging.DEBUG, 'DEBUG', False)
+LogLevel.register(logging.INFO, 'INFO', False)
+LogLevel.register(logging.WARNING, 'WARNING', True)
+LogLevel.register(logging.ERROR, 'ERROR', True)
+LogLevel.register(logging.CRITICAL, 'CRITICAL', True)
+
+
+# LogLevelFilter:
+#
+class LogLevelFilter :
+
+
+    # __init__:
+    #
+    def __init__ (self) :
+        self.levels = set(LogLevel.list_levels())
+
+
+    # enable:
+    #
+    def enable (self, lvl, enab=True) :
+        assert LogLevel.by_level(lvl)
+        if enab :
+            self.levels.add(lvl)
+        else :
+            self.levels.remove(lvl)
+            
+        
+    # __call__:
+    #
+    def __call__ (self, rec) :
+        return rec.levelno in self.levels
 
 
 # LogConsoleHandler:
@@ -876,7 +946,12 @@ class MBDumpApp :
         logger.setLevel(1)
         # console handler
         chdlr = LogConsoleHandler(1)
+        self.log_cfilter = LogLevelFilter()
+        chdlr.addFilter(self.log_cfilter)
         logger.addHandler(chdlr)
+        # set defaults from env vars
+        self.log_cfilter.enable(logging.DEBUG, bool(os.environ.get('MB_DEBUG')))
+        self.log_cfilter.enable(logging.INFO, bool(os.environ.get('MB_VERBOSE')))
 
 
     # __open_logfile:
