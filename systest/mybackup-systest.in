@@ -170,7 +170,9 @@ global_setup()
 run_module()
 {
 	local mod="$1" log="$1.log" r=0
+	st_sync "$ST_SAVEDIR" "$ST_ROOTDIR"
 	( _run_module "$mod"; ) >"$log" 2>&1 || return $?
+	st_sync "$ST_ROOTDIR" "$ST_ROOTDIR.$mod"
 	return 0
 }
 
@@ -179,7 +181,6 @@ _run_module()
 	local mod="$1"
 
 	# setup
-	st_sync "$ST_SAVEDIR" "$ST_ROOTDIR"
 	DOMAIN="$mod"
 	MBDUMP="$ST_ROOTDIR/usr/bin/mbdump"
 	ST_RUNDIR="$ST_RUNBASEDIR/$mod"
