@@ -321,9 +321,9 @@ def _atd_deepcopy (s, m) :
     return s.__class__(**kw)
 
 
-# DiskSched:
+# DumpSched:
 #
-DiskSched = attrdict('DiskSched', ())
+DumpSched = attrdict('DumpSched', ())
 
 
 # JournalState:
@@ -854,6 +854,13 @@ class DB :
         return sel[0].runid
 
 
+    # select_run:
+    #
+    def select_run (self, runid) :
+        sel = self._execute('select * from runs where runid == ?', (runid,))
+        return sel[0] if sel else None
+
+
     # record_dump:
     #
     def record_dump (self, disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles) :
@@ -862,6 +869,13 @@ class DB :
                       'values (?, ?, ?, ?, ?, ?, ?, ?)',
                       (disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles))
         trace("dump recorded: %s" % disk)
+
+
+    # select_last_dump:
+    #
+    def select_last_dump (self, disk) :
+        sel = self._execute('select * from dumps order by runid desc')
+        return sel[0] if sel else None
 
 
     # get_current_cycle:
@@ -959,7 +973,7 @@ class MBDumpApp :
                 sys.exit(0)
             else :
                 assert 0, (o, a)
-        assert len(args) == 1, args
+        assert len(args) >= 1, args
         # init the config
         self.config.init(args.pop(0))
         # create some directories
@@ -971,9 +985,13 @@ class MBDumpApp :
         # open the logfile and say something
         self.__open_logfile()
         trace("started at %s" % self.config.start_date)
+        # open the DB
+        self.db = DB(self.config.dbfile)
         # [fixme] select disks
-        sched = [DiskSched(disk=d.name, cfgdisk=d)
-                 for d in self.config.disks.values()]
+        sched = self.__select_disks(args)
+        if not sched :
+            trace("no disk selected, bye")
+            return
         # go
         self.__process(sched)
         # cleanup
@@ -1016,11 +1034,37 @@ class MBDumpApp :
         logger.addHandler(fhdlr)
 
 
+    # __select_disks:
+    #
+    def __select_disks (self, args) :
+        if args :
+            disklist = [self.config.disks[d] for d in args]
+        else :
+            disklist = list(self.config.disks.values())
+        sched = []
+        for disk in disklist :
+            dump = self.db.select_last_dump(disk)
+            if dump is None :
+                trace("%s: no last dump found, selected" % disk)
+            else :
+                hrs = self.db.select_run(dump.runid).hrs
+                # [TODO]
+                if hrs[:8] > self.config.start_hrs[:8] :
+                    error("%s: last dump is in the future!!" % disk.name)
+                    # force run ?
+                    continue
+                elif hrs[:8] < self.config.start_hrs[:8] :
+                    trace("%s: last dump older than 1 day, selected" % disk.name)
+                else :
+                    trace("%s: already dumped today, skipped" % disk.name)
+                    continue
+            sched.append(DumpSched(disk=disk.name, cfgdisk=disk))
+        return sched
+
+
     # __process:
     #
     def __process (self, sched) :
-        # open the DB
-        self.db = DB(self.config.dbfile)
         # record the run now so we get a runid
         self.runid = self.db.record_run(self.config.start_hrs)
         # open the journal
