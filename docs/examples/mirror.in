@@ -158,7 +158,7 @@ sync_dev()
 sync()
 {
 	local src="$1" dest="$2"
-	local cmd="$RSYNC -aP --delete --delete-excluded --numeric-ids"
+	local cmd="$RSYNC -a --delete --delete-excluded --numeric-ids"
 	test -e "$NAME.excl" && cmd="$cmd --exclude-from=$NAME.excl"
 	cmd="$cmd \"$src\"/ \"$dest\""
 	( cd "$src"; find -print0 | sort -z | xargs -0 ls -ldh --time-style='+%Y/%m/%d %H:%M:%S'; )
@@ -201,12 +201,20 @@ START_HRS=`date -d "@$START_STAMP" "+$HRS_FORMAT"`
 STAMPFILE="$STAMPSDIR/$NAME.stamp"
 test -e "$STAMPFILE" && LAST_STAMP=`cat "$STAMPFILE"` || LAST_STAMP=0
 LAST_HRS=`date -d "@$LAST_STAMP" "+$HRS_FORMAT"`
-trace "compare stamps: $LAST_HRS <> $START_HRS"
+trace "compare stamps: '$LAST_HRS' <> '$START_HRS'"
+test x"$LAST_HRS" != x"$START_HRS" || {
+	trace "mirror '$NAME' is up to date";
+	exit 0; }
 
 # parse dest
 DESTTYPE=`echo "$DEST" | cut -sd: -f1`
 trace "DESTTYPE='$DESTTYPE'"
 case "$DESTTYPE" in
-	dev) sync_dev; exit $?;;
+	dev) sync_dev || { local r=$?; error "sync_dev failed ($r)"; exit $r; };;
 	*) die "invalid dest type: '$DESTTYPE'";;
 esac
+
+# update stamp
+trace "update stamp: '$STAMPFILE' ($START_HRS)"
+echo "$START_STAMP" >"$STAMPFILE.tmp"
+mv -f "$STAMPFILE.tmp" "$STAMPFILE"

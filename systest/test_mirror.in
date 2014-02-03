@@ -68,5 +68,9 @@ EOF
 test_mirror_main()
 {
 	_check_enabled || return $?
+	title "DAY 1" 70
 	"$MBDUMP" test
+	title "DAY 2" 70
+	"$MBDUMP" test
+	title "END" 70
 }
