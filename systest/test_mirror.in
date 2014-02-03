@@ -1,35 +1,65 @@
 # -*- shell-script -*-
 
 
+# WARNING! this test does strange things and is dangerous! This is why
+# it disabled by default. Comment this line to enable.
+#
+
+
+_check_enabled()
+{
+	test x"${TEST_MIRROR_ENABLED:-}" = x"1" || {
+		trace "test_mirror is disabled";
+		return 1; }
+	test x"${TEST_MIRROR_DEVTYPE}" != x \
+		|| die "TEST_MIRROR_DEVTYPE is not set"
+	test x"${TEST_MIRROR_DEVUUID}" != x \
+		|| die "TEST_MIRROR_DEVUUID is not set"
+	return 0
+}
+
+
 # setup
 #
 test_mirror_setup()
 {
+	_check_enabled || return $?
+
 	st_mkfile "/etc/mybackup/test/mybackup.conf" - <<EOF
 {
   "scripts": {
     "mirror": {
       "prog": "./mirror",
-      "options": ["%(config)s", "%(disk)s", "%(orig)s", "%(path)s", "%(vardir)s"]
+      "options": ["-n", "%(disk)s",
+                  "-o", "%(orig)s",
+                  "-v", "%(vardir)s"]
     }
   },
   "disks": {
     "DISK_BOB": {
       "orig": "$ST_ROOTDIR/home/bob",
       "path": "$ST_ROOTDIR/mirror/bob",
-      "hooks": [["schedule", "mirror"]]
+      "hooks": [{
+        "script": "mirror",
+        "triggers": "schedule",
+        "options": ["-d", "dev:${TEST_MIRROR_DEVTYPE}:${TEST_MIRROR_DEVUUID}:/bob"]
+      }]
     }
   }
 }
 EOF
 
 	st_mkfile -m755 "/etc/mybackup/test/mirror" "@abs_top_builddir@/docs/examples/mirror"
-
+	st_mkfile "/etc/mybackup/test/DISK_BOB.excl" - <<EOF
+- tmp/*
+- FILE2
+EOF
 	st_mkdir "/mirror/bob"
 	st_mkdir "/home/bob"
-	echo "FILE1" >st_mkfile "/home/bob/FILE1" -
-	echo "FILE2" >st_mkfile "/home/bob/FILE2" -
-	echo "FILE3" >st_mkfile "/home/bob/FILE3" -
+	echo "FILE1" | st_mkfile "/home/bob/FILE1" -
+	echo "FILE2" | st_mkfile "/home/bob/FILE2" -
+	echo "FILE3" | st_mkfile "/home/bob/FILE3" -
+	echo "GARBAGE" | st_mkfile "/home/bob/tmp/IGNORED" -
 }
 
 
@@ -37,5 +67,6 @@ EOF
 #
 test_mirror_main()
 {
+	_check_enabled || return $?
 	"$MBDUMP" test
 }

@@ -201,12 +201,17 @@ def human_size (s) :
 
 # cmdexec:
 #
-def cmdexec (cmd, **kw) :
+def cmdexec (cmd, wait=False, check=True, **kw) :
     cwd = kw.pop('cwd', None)
     if cwd is None : cwd = os.getcwd()
     trace("%s> %s" % (cwd, ' '.join(cmd)))
     proc = subprocess.Popen(cmd, cwd=cwd, **kw)
-    return proc
+    if not wait :
+        return proc
+    r = proc.wait()
+    if check and r != 0 :
+        assert 0, "[todo] process failed : %s (%s)" % (cmd[0], r)
+    return r
 
 
 # Dates and time stamps
@@ -582,9 +587,9 @@ class CfgDisk :
     #
     def run_hooks (self, trigger) :
         for hook in self.hooks :
-            if trigger not in hook[0].split(',') :
+            if trigger not in hook['triggers'].split(',') :
                 continue
-            script = self.config.scripts[hook[1]]
+            script = self.config.scripts[hook['script']]
             vardir = os.path.join(self.config.scriptsvardir, script.name)
             _mkdir(vardir)
             cmd = [script.prog]
@@ -593,8 +598,8 @@ class CfgDisk :
                  'orig': self.orig,
                  'path': self.path,
                  'vardir': vardir}
-            cmd.extend(o % a for o in script.options)
-            cmdexec(cmd, cwd=self.config.cfgdir)
+            cmd.extend(o % a for o in script.options + hook['options'])
+            cmdexec(cmd, cwd=self.config.cfgdir, wait=True)
 
 
 # CfgScript:

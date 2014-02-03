@@ -1,3 +1,212 @@
 #!/bin/sh
 
-echo "MIRROR: $*" >&2
+set -eu
+#set -x
+
+# trace
+trace() { echo "mirror: $*"; }
+error() { echo "mirror:ERROR: $*" >&2; exit 1; }
+die() { echo "mirror:FATAL: $*" >&2; exit 1; }
+
+trace "MIRROR: $0 $@"
+
+# [fixme]
+MOUNT='sudo mount'
+UMOUNT='sudo umount'
+RSYNC='sudo rsync'
+
+# _mtab
+_mtab()
+{
+	local e="s,^UUID=,/dev/disk/by-uuid/,g;
+             s,^LABEL=,/dev/disk/by-label/,g;
+             /^[ \t]*\(\([^/].*\)\|\)$/d;"
+	local d
+	for d in `mount | awk '{print $1}' | sed -e "$e"`; do
+		d=`readlink -e "$d"` && test -e "$d" || continue
+		echo "$d"
+	done
+}
+
+# _fstab DEV
+_fstab()
+{
+	local e="/^[ \t]*#.*$/d;
+             s,^[ \t]*UUID=,/dev/disk/by-uuid/,g;
+             s,^[ \t]*LABEL=,/dev/disk/by-label/,g;
+             /^[ \t]*\(\([^/].*\)\|\)$/d;"
+	local dev=`readlink -e "$1"` && test -e "$dev" \
+		|| { error "invalid device: '$1'"; return 1; }
+	local d l
+	exec </etc/fstab
+	while read l; do
+		d=`echo "$l" | awk '{print $1}' | sed -e "$e"`
+		test x"$d" != x || continue
+		d=`readlink -e "$d"` && test -e "$d" || continue
+		test x"$d" = x"$dev" || continue
+		echo "$l"
+		return 0
+	done
+	return 1
+}
+
+# _ismounted DEV
+_ismounted()
+{
+	local dev=`readlink -e "$1"` && test -e "$dev" \
+		|| { error "invalid device: '$1'"; return 1; }
+	local d
+	#trace "ISMOUNTED: '$dev'"
+	for d in `_mtab`; do
+		#trace "-> $d"
+		test x"$d" != x"$dev" || return 0
+	done
+	#trace "NO"
+	return 1
+}
+
+# _umount DEV
+_umount()
+{
+	local dev=`readlink -e "$1"` && test -e "$dev" \
+		|| { error "invalid device: '$1'"; return 1; }
+	_ismounted "$dev" || {
+		trace "device '$dev' is not mounted";
+		return 0; }
+	trace "unmounting '$dev'"
+	if $UMOUNT "$dev"; then
+		trace "OK"
+		return 0
+	fi
+	error "could not unmount '$dev' - trying lazy mode"
+	if $UMOUNT "$dev" -l; then
+		trace "WARNING: device '$dev' unmounted in lazy mode !?"
+		return 0
+	fi
+	error "could not unmount '$dev'"
+	return 1
+}
+
+# _mount DEV DIR TYPE OPTS
+_mount()
+{
+	local dev="$1" dir="$2" type="$3" opts="$4"
+	dev=`readlink -e "$dev"` && test -e "$dev" \
+		|| { error "invalid device: '$1'"; return 1; }
+	trace "mounting '$dev' ($type) on '$dir' ($opts)"
+	if $MOUNT "$dev" "$dir" -t "$type" -o "$opts"; then
+		trace "OK"
+	else
+		error "could not mount '$dev'"
+		return 1
+	fi
+}
+
+# _remount DEV
+_remount()
+{
+	#set -x
+	local dev=`readlink -e "$1"` && test -e "$dev" \
+		|| { error "invalid device: '$1'"; return 1; }
+	local l="`_fstab $dev`" || {
+		trace "device '$dev' not found in fstab";
+		return 0; }
+	local fdev=`echo "$l" | awk '{print $1}'`
+	trace "remounting '$dev' ($fdev)"
+	trace "$l"
+	if $MOUNT "$fdev"; then
+		trace "OK"
+		return 0
+	else
+		error "could not remount '$dev'"
+		return 1
+	fi
+	#set +x
+}
+
+# sync_dev
+sync_dev()
+{
+	DESTDEVTYPE=`echo "$DEST" | cut -sd: -f2`
+	DESTUUID=`echo "$DEST" | cut -sd: -f3`
+	DESTDIR=`echo "$DEST" | cut -sd: -f4`
+	DESTDEV="/dev/disk/by-uuid/$DESTUUID"
+	trace "UUID: '$DESTUUID'"
+	trace "DEV:  '$DESTDEV'"
+	trace "DIR:  '$DESTDIR'"
+	test x`echo "$DESTDIR" | cut -b1` = x"/" || \
+		die "DESTDIR must be absolute: '$DESTDIR'"
+	_umount "$DESTDEV" || die "umount failed"
+	local mntdir="$MNTDIR/$DESTUUID"
+	test -d "$mntdir" || mkdir "$mntdir"
+	_mount "$DESTDEV" "$mntdir" "$DESTDEVTYPE" "rw" || die "mount failed"
+	test -d "${mntdir}${DESTDIR}" || mkdir -vp "${mntdir}${DESTDIR}"
+	local r=0
+	( sync "$ORIG" "${mntdir}${DESTDIR}"; ) || r=$?
+	_umount "$DESTDEV" && _remount "$DESTDEV" \
+		|| error "could not remount '$DESTDEV'"; 
+	if test $r -eq 0; then
+		trace "all done!"
+		return 0
+	else
+		error "rsync failed!"
+		return 1
+	fi
+}
+
+# sync
+sync()
+{
+	local src="$1" dest="$2"
+	local cmd="$RSYNC -aP --delete --delete-excluded --numeric-ids"
+	test -e "$NAME.excl" && cmd="$cmd --exclude-from=$NAME.excl"
+	cmd="$cmd \"$src\"/ \"$dest\""
+	( cd "$src"; find -print0 | sort -z | xargs -0 ls -ldh --time-style='+%Y/%m/%d %H:%M:%S'; )
+	trace "`pwd`> $cmd"
+	eval "$cmd" || return $?
+	( cd "$dest"; find -print0 | sort -z | xargs -0 ls -ldh --time-style='+%Y/%m/%d %H:%M:%S'; )
+	return 0
+}
+
+# parse the command line
+OPTS=`getopt -n mirror -o 'n:d:o:v:' -- "${@}"`
+eval set -- "$OPTS"
+while true; do
+	case "$1" in
+		-n) NAME="$2"; shift 2;;
+		-o) ORIG="$2"; shift 2;;
+		-d) DEST="$2"; shift 2;;
+		-v) VARDIR="$2"; shift 2;;
+		--) break;;
+		*) die "? $1"
+	esac
+done
+
+trace "NAME: '$NAME'"
+trace "ORIG: '$ORIG'"
+trace "DEST: '$DEST'"
+trace "VARDIR: '$VARDIR'"
+
+MNTDIR="$VARDIR/mnt"
+STAMPSDIR="$VARDIR/stamps"
+test -d "$MNTDIR" || mkdir "$MNTDIR"
+chown "`id -un`:" "$MNTDIR"
+chmod 700 "$MNTDIR"
+test -d "$STAMPSDIR" || mkdir "$STAMPSDIR"
+
+# check the timestamp
+HRS_FORMAT='%Y%m%d'
+START_STAMP=`date '+%s'`
+START_HRS=`date -d "@$START_STAMP" "+$HRS_FORMAT"`
+STAMPFILE="$STAMPSDIR/$NAME.stamp"
+test -e "$STAMPFILE" && LAST_STAMP=`cat "$STAMPFILE"` || LAST_STAMP=0
+LAST_HRS=`date -d "@$LAST_STAMP" "+$HRS_FORMAT"`
+trace "compare stamps: $LAST_HRS <> $START_HRS"
+
+# parse dest
+DESTTYPE=`echo "$DEST" | cut -sd: -f1`
+trace "DESTTYPE='$DESTTYPE'"
+case "$DESTTYPE" in
+	dev) sync_dev; exit $?;;
+	*) die "invalid dest type: '$DESTTYPE'";;
+esac
