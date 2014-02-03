@@ -44,11 +44,21 @@ test_base_setup()
 
 	st_mkfile "/etc/mybackup/test/mybackup.conf" - <<EOF
 {
+  "scripts": {
+    "HOOK": {
+      "prog": "./HOOK",
+      "options": ["%(config)s", "%(disk)s", "%(orig)s", "%(path)s"]
+    }
+  },
   "disks": {
     "DISK_1": {
       "orig": "$ST_ROOTDIR/orig/DISK_1",
       "path": "$ST_ROOTDIR/fs/DISK_1",
-      "_FIXME_hooks": [["schedule", "./HOOK", "%(config)s", "%(disk)s", "%(orig)s", "%(path)s"]]
+      "hooks": [{
+        "script": "HOOK",
+        "triggers": "schedule",
+        "options": ["extra", "args..."]
+      }]
     },
     "DISK_2": {
       "orig": "",
