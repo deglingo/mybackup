@@ -50,9 +50,12 @@ AC_CONFIG_FILES([ \
 	Makefile \
 	bin/Makefile \
 	mybackup/Makefile \
+	docs/Makefile \
+	docs/examples/Makefile \
 	systest/Makefile \
 ])
 AC_CONFIG_FILES([bin/mbdump], [chmod +x bin/mbdump])
+AC_CONFIG_FILES([docs/examples/mirror])
 AC_CONFIG_FILES([systest/mybackup-systest], [chmod +x systest/mybackup-systest])
 AC_CONFIG_FILES(m4_map_args_w(mb_systest_modules, [systest/], [], [ ]))
 AC_OUTPUT

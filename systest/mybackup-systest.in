@@ -226,7 +226,7 @@ st_mkfile()
 	case "$src" in
 		'') ;;
 		-) cat >"$absname";;
-		*) die "[todo] $src";;
+		*) cp "$src" "$absname";;
 	esac
 	test x"$mode" = x || chmod "$mode" "$absname"
 	test x"$date" = x || touch -d "$date" "$absname"

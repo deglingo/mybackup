@@ -7,22 +7,23 @@ test_mirror_setup()
 {
 	st_mkfile "/etc/mybackup/test/mybackup.conf" - <<EOF
 {
-  "hooks": {
-    "MIRROR": {
-      "name": "MIRROR",
-      "triggers": ["select"],
-      "cmd": ["./mirror", "%(config)s", "%(disk)s", "%(start_date)s", "%(orig)s", "%(path)s"]
+  "scripts": {
+    "mirror": {
+      "prog": "./mirror",
+      "options": ["%(config)s", "%(disk)s", "%(orig)s", "%(path)s"]
     }
   },
   "disks": {
     "DISK_BOB": {
       "orig": "$ST_ROOTDIR/home/bob",
       "path": "$ST_ROOTDIR/mirror/bob",
-      "hooks": ["MIRROR:select"]
+      "hooks": [["schedule", "mirror"]]
     }
   }
 }
 EOF
+
+	st_mkfile -m755 "/etc/mybackup/test/mirror" "@abs_top_builddir@/docs/examples/mirror"
 
 	st_mkdir "/mirror/bob"
 	st_mkdir "/home/bob"

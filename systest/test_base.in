@@ -48,7 +48,7 @@ test_base_setup()
     "DISK_1": {
       "orig": "$ST_ROOTDIR/orig/DISK_1",
       "path": "$ST_ROOTDIR/fs/DISK_1",
-      "hooks": [["schedule", "./HOOK", "%(config)s", "%(disk)s", "%(orig)s", "%(path)s"]]
+      "_FIXME_hooks": [["schedule", "./HOOK", "%(config)s", "%(disk)s", "%(orig)s", "%(path)s"]]
     },
     "DISK_2": {
       "orig": "",

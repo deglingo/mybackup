@@ -498,6 +498,9 @@ class Config :
     # configure:
     #
     def configure (self, conf) :
+        self.scripts = dict(
+            (n, CfgScript(self, n, sconf))
+            for n, sconf in conf.get('scripts', {}).items())
         self.disks = collections.OrderedDict(
             (n, CfgDisk(self, n, dconf))
             for n, dconf in conf.pop('disks').items())
@@ -578,18 +581,47 @@ class CfgDisk :
     #
     def run_hooks (self, trigger) :
         for hook in self.hooks :
-            if hook[0] != trigger :
+            if trigger not in hook[0].split(',') :
                 continue
-            # [fixme]
-            args = {
-                'config': self.config.cfgname,
-                'disk': self.name,
-                'orig': self.orig,
-                'path': self.path,
-            }
-            cmd = [a % args for a in hook[1:]]
-            trace("run hook: %s:%s" % (self.name, trigger))
+            script = self.config.scripts[hook[1]]
+            cmd = [script.prog]
+            a = {'config': self.config.cfgname,
+                 'disk': self.name,
+                 'orig': self.orig,
+                 'path': self.path}
+            cmd.extend(o % a for o in script.options)
             cmdexec(cmd, cwd=self.config.cfgdir)
+
+
+# CfgScript:
+#
+class CfgScript :
+
+
+    config = property(lambda self: self._wr_config())
+
+    
+    # __init__:
+    #
+    def __init__ (self, config, name, dconf) :
+        self._wr_config = weakref.ref(config)
+        self.name = name
+        self.configure(dconf)
+
+
+    # __repr__:
+    #
+    def __repr__ (self) :
+        return '<%s %s:%s>' % (self.__class__.__name__,
+                               self.config.cfgname,
+                               self.name)
+
+
+    # configure:
+    #
+    def configure (self, dconf) :
+        for n, v in dconf.items() :
+            setattr(self, n, v)
 
 
 # Journal:

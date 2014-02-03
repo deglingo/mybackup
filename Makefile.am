@@ -1,6 +1,7 @@
 #
 
-SUBDIRS = bin mybackup systest
+# note: docs must be before systest!
+SUBDIRS = bin mybackup docs systest
 
 .PHONY: listdirs
 
