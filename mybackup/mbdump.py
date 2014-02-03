@@ -599,7 +599,18 @@ class CfgDisk :
                  'path': self.path,
                  'vardir': vardir}
             cmd.extend(o % a for o in script.options + hook['options'])
-            cmdexec(cmd, cwd=self.config.cfgdir, wait=True)
+            proc = cmdexec(cmd, cwd=self.config.cfgdir,
+                           stdout=CMDPIPE, stderr=CMDPIPE)
+            name = 'hook:%s:%s' % (trigger, self.name)
+            parser = StrangeParser(name)
+            pout = PipeThread(name, proc.stdout, (),
+                              line_handler=parser, started=True)
+            perr = PipeThread(name, proc.stderr, (),
+                              line_handler=parser, started=True)
+            pout.join()
+            perr.join()
+            r = proc.wait()
+            assert r == 0, (r, self, hook)
 
 
 # CfgScript:
@@ -631,6 +642,23 @@ class CfgScript :
     def configure (self, dconf) :
         for n, v in dconf.items() :
             setattr(self, n, v)
+
+
+# StrangeParser:
+#
+class StrangeParser :
+
+
+    # __init__:
+    #
+    def __init__ (self, name) :
+        self.name = name
+
+
+    # __call__:
+    #
+    def __call__ (self, line) :
+        trace("STRANGE:%s: %s" % (self.name, line.strip()))
 
 
 # Journal:
