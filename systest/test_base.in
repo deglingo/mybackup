@@ -2,21 +2,57 @@
 # -*- shell-script -*-
 
 
+# setup_fs:
+#
+setup_fs()
+{
+	local oldpwd=`pwd`
+	local stage="$ST_RUNDIR/fs.stamp-h"
+	local fsdir="$ST_RUNDIR/fs"
+	test -e "$stage" -a "$stage" -nt "$ST_ARG0" \
+		&& return || true
+	trace "SETUP FS: $ST_RUNDIR ($ST_ARG0)"
+	rm -rf "$fsdir"
+	mkdir "$fsdir"
+	# day 1
+	local dir="$fsdir/d1" date=`st_fakedate -d1`
+	st_mkdir -r "$fsdir" "/d1"
+	st_rand 10 | st_mkfile -r "$dir" -d "$date" "/DISK_1/FILE_1A" -
+	st_rand 10 | st_mkfile -r "$dir" -d "$date" "/DISK_1/FILE_1B" -
+	st_rand 10 | st_mkfile -r "$dir" -d "$date" "/DISK_1/FILE_1C" -
+	st_rand 10 | st_mkfile -r "$dir" -d "$date" "/DISK_2/FILE_2A" -
+	touch -d "$date" "$dir/DISK_1" "$dir/DISK_2"
+	# day 2
+	local dir="$fsdir/d2" date=`st_fakedate -d2`
+	st_sync "$fsdir/d1" "$dir"
+	# day 3
+	local dir="$fsdir/d3" date=`st_fakedate -d3`
+	st_sync "$fsdir/d2" "$dir"
+	# ok
+	echo >$stage
+	cd "$ST_RUNDIR"
+	find -print0 | sort -z | xargs -0 ls -ldh --time-style='+%Y/%m/%d %H:%M:%S' >FILES.txt
+	cd "$oldpwd"
+}
+
+
 # setup
 #
 test_base_setup()
 {
+	setup_fs
+
 	st_mkfile "/etc/mybackup/test/mybackup.conf" - <<EOF
 {
   "disks": {
-    "HOME": {
-      "orig": "$ST_ROOTDIR/somewhere/else/home/bob",
-      "path": "$ST_ROOTDIR/home/bob",
+    "DISK_1": {
+      "orig": "$ST_ROOTDIR/orig/DISK_1",
+      "path": "$ST_ROOTDIR/fs/DISK_1",
       "hooks": [["schedule", "./HOOK", "%(config)s", "%(disk)s", "%(orig)s", "%(path)s"]]
     },
-    "STUFF": {
+    "DISK_2": {
       "orig": "",
-      "path": "$ST_ROOTDIR/stuff",
+      "path": "$ST_ROOTDIR/fs/DISK_2",
       "hooks": []
     }
   }
@@ -32,13 +68,7 @@ done
 echo "HOOK: ALL DONE!"
 EOF
 
-	st_mkfile "/home/bob/FILE1" - <<EOF
-Lots of data...
-EOF
-
-	st_mkfile "/stuff/FILE2" - <<EOF
-Some stuff...
-EOF
+	test -d "$ST_ROOTDIR/fs" || st_mkdir /fs
 }
 
 
@@ -51,15 +81,18 @@ test_base_main()
 	
 	# day 1
 	title "DAY 1" 70
+	st_sync "$ST_RUNDIR/fs/d1" "$ST_ROOTDIR/fs"
 	"$MBDUMP" test
 	
 	# day 2
 	sleep 1 # removeme
 	title "DAY 2" 70
+	st_sync "$ST_RUNDIR/fs/d2" "$ST_ROOTDIR/fs"
 	"$MBDUMP" test
 	
 	# day 3
 	sleep 1 # removeme
 	title "DAY 3" 70
+	st_sync "$ST_RUNDIR/fs/d3" "$ST_ROOTDIR/fs"
 	"$MBDUMP" test
 }

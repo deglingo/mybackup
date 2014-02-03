@@ -11,6 +11,7 @@ ST_SRCDIR=`readlink -e '@abs_top_srcdir@'`
 ST_BUILDDIR="$BUILDDIR/st-build"
 ST_ROOTDIR="$BUILDDIR/st-root"
 ST_SAVEDIR="$BUILDDIR/st-save"
+ST_RUNBASEDIR="$BUILDDIR/st-run"
 
 MB_SYSTEST_MODULES='@MB_SYSTEST_MODULES@'
 
@@ -91,8 +92,8 @@ title()
 }
 
 
-# _sync
-_sync()
+# st_sync
+st_sync()
 {
 	local src="$1" dest="$2"
 	trace "sync: '$src' -> '$dest'"
@@ -161,7 +162,7 @@ global_setup()
 	cd "$ST_ROOTDIR"
 	mkdir tmp
 	# save the rootdir
-	_sync "$ST_ROOTDIR" "$ST_SAVEDIR"
+	st_sync "$ST_ROOTDIR" "$ST_SAVEDIR"
 	cd "$oldpwd"
 }
 
@@ -178,9 +179,12 @@ _run_module()
 	local mod="$1"
 
 	# setup
-	_sync "$ST_SAVEDIR" "$ST_ROOTDIR"
+	st_sync "$ST_SAVEDIR" "$ST_ROOTDIR"
 	DOMAIN="$mod"
 	MBDUMP="$ST_ROOTDIR/usr/bin/mbdump"
+	ST_RUNDIR="$ST_RUNBASEDIR/$mod"
+	ST_ARG0="$BUILDDIR/$mod" # ?
+	test -d "$ST_RUNDIR" || mkdir -p "$ST_RUNDIR"
 	export PATH="$ST_ROOTDIR/usr/bin:/usr/bin:/bin"
 	export PYTHONPATH="$ST_ROOTDIR/usr/lib/python@PYTHON_VERSION@/site-packages"
 
@@ -193,14 +197,16 @@ _run_module()
 }
 
 
-# tools
+# st_mkfile [-r ROOT] [-m MODE] [-d DATE] FILENAME [SOURCE]
 st_mkfile()
 {
-	local fname src= mode=
-	local opts=`getopt -o 'm:' -- "${@}"` || die
+	local fname src= mode= root="$ST_ROOTDIR" date=
+	local opts=`getopt -o 'r:d:m:' -- "${@}"` || die
 	eval set -- "$opts"
 	while true; do
 		case "$1" in
+			-r) root="$2"; shift 2;;
+			-d) date="$2"; shift 2;;
 			-m) mode="$2"; shift 2;;
 			--) shift;
 				test $# -ge 1 && fname="$1" \
@@ -214,8 +220,8 @@ st_mkfile()
 	test x"${fname:0:1}" = x"/" \
 		|| die "st_mkfile: fname must be absolute ($fname)"
 	local dirname=`dirname "$fname"`
-	test x"$dirname" = x"/" || st_mkdir "$dirname"
-	local absname="${ST_ROOTDIR}${fname}"
+	test x"$dirname" = x"/" || st_mkdir -r "$root" "$dirname"
+	local absname="${root}${fname}"
 	trace "creating file: '$fname' ($absname)"
 	case "$src" in
 		'') ;;
@@ -223,15 +229,18 @@ st_mkfile()
 		*) die "[todo] $src";;
 	esac
 	test x"$mode" = x || chmod "$mode" "$absname"
+	test x"$date" = x || touch -d "$date" "$absname"
 }
 
+# st_mkdir [-r ROOT] DIRNAME
 st_mkdir()
 {
-	local dname
-	local opts=`getopt -o '' -- "${@}"` || die
+	local dname root="$ST_ROOTDIR" date=
+	local opts=`getopt -o 'r:' -- "${@}"` || die
 	eval set -- "$opts"
 	while true; do
 		case "$1" in
+			-r) root="$2"; shift 2;;
 			--) shift;
 				test $# -ge 1 && dname="$1" \
 					|| die "st_mkdir: dirname required"
@@ -243,11 +252,35 @@ st_mkdir()
 	test x"${dname:0:1}" = x"/" \
 		|| die "st_mkdir: dirname must be absolute ($dname)"
 	local parent=`dirname "$dname"`
-	test x"$parent" = x"/" || st_mkdir "$parent"
-	local absname="${ST_ROOTDIR}${dname}"
+	test x"$parent" = x"/" || st_mkdir -r "$root" "$parent"
+	local absname="${root}${dname}"
 	test -d "$absname" || {
 		trace "creating directory: '$dname' ($absname)"
 		mkdir "$absname"; }
+	test x"$date" = x || touch -d "$date" "$absname"
+}
+
+st_rand()
+{
+	dd if=/dev/urandom bs=1M count=${1:-1} 2>/dev/null
+}
+
+st_fakedate()
+{
+	local days=0 hours=0
+	local opts=`getopt -o 'd:h:' -- "${@}"`
+	eval set -- "$opts"
+	while true; do
+		case "$1" in
+			-d) days=$2; shift 2;;
+			-h) hours=$2; shift 2;;
+			--) break;;
+			*) die "? $1";;
+		esac
+	done
+	local stamp=`date -d '1980/01/01 01:00:00' '+%s'`
+	stamp=`expr $stamp + $days '*' 86400 + $hours '*' 3600`
+	date -d "@$stamp" "+%Y/%m/%d %H:%M:%S"
 }
 
 
