@@ -1,0 +1,2 @@
+#!@SHELL@
+@PYTHON@ -m mybackup.mbui "${@}"

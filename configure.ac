@@ -34,6 +34,8 @@ fi
 m4_define([mb_modules], [ \
   __init__ \
   mbdump \
+  mbui \
+  mbuidlg \
 ])
 
 AC_SUBST([MB_MODULES],    "m4_map_args_w(mb_modules, [], [], [ ])")
@@ -55,6 +57,7 @@ AC_CONFIG_FILES([ \
 	systest/Makefile \
 ])
 AC_CONFIG_FILES([bin/mbdump], [chmod +x bin/mbdump])
+AC_CONFIG_FILES([bin/mbui], [chmod +x bin/mbui])
 AC_CONFIG_FILES([docs/examples/mirror])
 AC_CONFIG_FILES([systest/mybackup-systest], [chmod +x systest/mybackup-systest])
 AC_CONFIG_FILES(m4_map_args_w(mb_systest_modules, [systest/], [], [ ]))

@@ -1,3 +1,3 @@
 #
 
-bin_SCRIPTS = mbdump
+bin_SCRIPTS = mbdump mbui

@@ -1021,17 +1021,30 @@ class MBDumpApp :
         self.__setup_logger()
         self.config = Config()
         # parse the command line
-        shortopts = 'h'
+        # [fixme] -c should be elsewhere
+        _cfgparam = ''
+        shortopts = 'c:h'
         longopts = ['help']
         opts, args = getopt.gnu_getopt(sys.argv[1:], shortopts, longopts)
         for o, a in opts :
             if o in ('-h', '--help') :
                 sys.stdout.write(USAGE)
                 sys.exit(0)
+            elif o in ('-c',) :
+                _cfgparam = a
             else :
                 assert 0, (o, a)
-        assert len(args) >= 1, args
+        # [REMOVEME]
+        if _cfgparam :
+            if len(args) >= 1 :
+                self.config.init(args[0])
+            o = self.config
+            for n in _cfgparam.split('.') :
+                o = getattr(o, n)
+            sys.stdout.write('%s\n' % str(o))
+            sys.exit(0)
         # init the config
+        assert len(args) >= 1, args
         self.config.init(args.pop(0))
         # create some directories
         _mkdir(self.config.dbdir)
