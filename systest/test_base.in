@@ -13,6 +13,11 @@ test_base_setup()
       "orig": "$ST_ROOTDIR/somewhere/else/home/bob",
       "path": "$ST_ROOTDIR/home/bob",
       "hooks": [["schedule", "./HOOK", "%(config)s", "%(disk)s", "%(orig)s", "%(path)s"]]
+    },
+    "STUFF": {
+      "orig": "",
+      "path": "$ST_ROOTDIR/stuff",
+      "hooks": []
     }
   }
 }
@@ -29,6 +34,10 @@ EOF
 
 	st_mkfile "/home/bob/FILE1" - <<EOF
 Lots of data...
+EOF
+
+	st_mkfile "/stuff/FILE2" - <<EOF
+Some stuff...
 EOF
 }
 
