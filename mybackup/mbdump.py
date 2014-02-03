@@ -488,6 +488,7 @@ class Config :
         self.dumpdir = os.path.join(self.cfgvardir, 'dumps')
         self.partdir = os.path.join(self.dumpdir, 'partial')
         self.logdir = os.path.join(self.cfgvardir, 'log')
+        self.scriptsvardir = os.path.join(self.cfgvardir, 'scripts')
         # read the config file
         self.cfgfile = os.path.join(self.cfgdir, 'mybackup.conf')
         trace("reading config file: '%s'" % self.cfgfile)
@@ -584,11 +585,14 @@ class CfgDisk :
             if trigger not in hook[0].split(',') :
                 continue
             script = self.config.scripts[hook[1]]
+            vardir = os.path.join(self.config.scriptsvardir, script.name)
+            _mkdir(vardir)
             cmd = [script.prog]
             a = {'config': self.config.cfgname,
                  'disk': self.name,
                  'orig': self.orig,
-                 'path': self.path}
+                 'path': self.path,
+                 'vardir': vardir}
             cmd.extend(o % a for o in script.options)
             cmdexec(cmd, cwd=self.config.cfgdir)
 

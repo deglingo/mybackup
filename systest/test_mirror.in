@@ -10,7 +10,7 @@ test_mirror_setup()
   "scripts": {
     "mirror": {
       "prog": "./mirror",
-      "options": ["%(config)s", "%(disk)s", "%(orig)s", "%(path)s"]
+      "options": ["%(config)s", "%(disk)s", "%(orig)s", "%(path)s", "%(vardir)s"]
     }
   },
   "disks": {
