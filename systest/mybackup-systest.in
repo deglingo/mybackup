@@ -278,7 +278,7 @@ st_fakedate()
 			*) die "? $1";;
 		esac
 	done
-	local stamp=`date -d '1980/01/01 01:00:00' '+%s'`
+	local stamp=`date -d '1979/12/31 00:00:00' '+%s'`
 	stamp=`expr $stamp + $days '*' 86400 + $hours '*' 3600`
 	date -d "@$stamp" "+%Y/%m/%d %H:%M:%S"
 }

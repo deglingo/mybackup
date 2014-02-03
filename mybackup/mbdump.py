@@ -185,6 +185,13 @@ def stamp2date (stamp) :
                                     time.localtime(stamp)))
 
 
+# date2stamp:
+#
+def date2stamp (date) :
+    check_date(date)
+    return check_stamp(int(time.mktime(time.strptime(date, '%Y/%m/%d %H:%M:%S'))))
+
+
 # attrdict:
 #
 def attrdict (tpname, attrs=None, defo=None) :
@@ -395,7 +402,11 @@ class Config :
     # init:
     #
     def init (self, cfgname) :
-        self.start_stamp = int(time.time())
+        # starting date
+        dt = os.environ.get('_MB_SYSTEST_DATE')
+        self.start_stamp = int(time.time()) if dt is None \
+          else date2stamp(dt)
+        # init
         self.cfgname = cfgname
         self.cfgdir = os.path.join(self.system.pkgsysconfdir, self.cfgname)
         self.vardir = self.system.pkgvardir

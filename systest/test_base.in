@@ -17,10 +17,10 @@ setup_fs()
 	# day 1
 	local dir="$fsdir/d1" date=`st_fakedate -d1`
 	st_mkdir -r "$fsdir" "/d1"
-	st_rand 10 | st_mkfile -r "$dir" -d "$date" "/DISK_1/FILE_1A" -
-	st_rand 10 | st_mkfile -r "$dir" -d "$date" "/DISK_1/FILE_1B" -
-	st_rand 10 | st_mkfile -r "$dir" -d "$date" "/DISK_1/FILE_1C" -
-	st_rand 10 | st_mkfile -r "$dir" -d "$date" "/DISK_2/FILE_2A" -
+	st_rand 1 | st_mkfile -r "$dir" -d "$date" "/DISK_1/FILE_1A" -
+	st_rand 1 | st_mkfile -r "$dir" -d "$date" "/DISK_1/FILE_1B" -
+	st_rand 1 | st_mkfile -r "$dir" -d "$date" "/DISK_1/FILE_1C" -
+	st_rand 1 | st_mkfile -r "$dir" -d "$date" "/DISK_2/FILE_2A" -
 	touch -d "$date" "$dir/DISK_1" "$dir/DISK_2"
 	# day 2
 	local dir="$fsdir/d2" date=`st_fakedate -d2`
@@ -79,20 +79,11 @@ test_base_main()
 	trace "MBDUMP: '$MBDUMP' (`which $MBDUMP`)"
 	"$MBDUMP" --help >"$ST_ROOTDIR/tmp/mbdump-help.txt"
 	
-	# day 1
-	title "DAY 1" 70
-	st_sync "$ST_RUNDIR/fs/d1" "$ST_ROOTDIR/fs"
-	"$MBDUMP" test
-	
-	# day 2
-	sleep 1 # removeme
-	title "DAY 2" 70
-	st_sync "$ST_RUNDIR/fs/d2" "$ST_ROOTDIR/fs"
-	"$MBDUMP" test
-	
-	# day 3
-	sleep 1 # removeme
-	title "DAY 3" 70
-	st_sync "$ST_RUNDIR/fs/d3" "$ST_ROOTDIR/fs"
-	"$MBDUMP" test
+	# go
+	for day in `seq 1 3`; do
+		date=`st_fakedate -d$day -h1`
+		title "DAY $day" 70
+		st_sync "$ST_RUNDIR/fs/d$day" "$ST_ROOTDIR/fs"
+		_MB_SYSTEST_DATE="$date" "$MBDUMP" test
+	done
 }
