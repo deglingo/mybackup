@@ -1,0 +1,40 @@
+# -*- shell-script -*-
+
+
+# setup
+#
+test_mirror_setup()
+{
+	st_mkfile "/etc/mybackup/test/mybackup.conf" - <<EOF
+{
+  "hooks": {
+    "MIRROR": {
+      "name": "MIRROR",
+      "triggers": ["select"],
+      "cmd": ["./mirror", "%(config)s", "%(disk)s", "%(start_date)s", "%(orig)s", "%(path)s"]
+    }
+  },
+  "disks": {
+    "DISK_BOB": {
+      "orig": "$ST_ROOTDIR/home/bob",
+      "path": "$ST_ROOTDIR/mirror/bob",
+      "hooks": ["MIRROR:select"]
+    }
+  }
+}
+EOF
+
+	st_mkdir "/mirror/bob"
+	st_mkdir "/home/bob"
+	echo "FILE1" >st_mkfile "/home/bob/FILE1" -
+	echo "FILE2" >st_mkfile "/home/bob/FILE2" -
+	echo "FILE3" >st_mkfile "/home/bob/FILE3" -
+}
+
+
+# main
+#
+test_mirror_main()
+{
+	"$MBDUMP" test
+}
