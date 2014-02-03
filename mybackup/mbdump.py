@@ -332,7 +332,8 @@ JournalState = attrdict (
     'JournalState', 
     (),
     defo={'state': 'init',
-          'dumps': {}})
+          'dumps': {},
+          'stranges': []})
 
 
 # DumpState:
@@ -585,7 +586,7 @@ class CfgDisk :
 
     # run_hooks:
     #
-    def run_hooks (self, trigger) :
+    def run_hooks (self, trigger, journal) :
         for hook in self.hooks :
             if trigger not in hook['triggers'].split(',') :
                 continue
@@ -602,7 +603,7 @@ class CfgDisk :
             proc = cmdexec(cmd, cwd=self.config.cfgdir,
                            stdout=CMDPIPE, stderr=CMDPIPE)
             name = 'hook:%s:%s' % (trigger, self.name)
-            parser = StrangeParser(name)
+            parser = StrangeParser(name, journal)
             pout = PipeThread(name, proc.stdout, (),
                               line_handler=parser, started=True)
             perr = PipeThread(name, proc.stderr, (),
@@ -651,14 +652,18 @@ class StrangeParser :
 
     # __init__:
     #
-    def __init__ (self, name) :
+    def __init__ (self, name, journal) :
         self.name = name
+        self.journal = journal
 
 
     # __call__:
     #
     def __call__ (self, line) :
-        trace("STRANGE:%s: %s" % (self.name, line.strip()))
+        line = line.strip()
+        if not line : return
+        trace("STRANGE:%s: %s" % (self.name, line))
+        self.journal.record('STRANGE', source=self.name, line=line)
 
 
 # Journal:
@@ -684,12 +689,16 @@ class Journal :
                           ('raw_size', 'i'),
                           ('comp_size', 'i'),
                           ('nfiles',    'i')),
+
+        'STRANGE': (('source', 's'),
+                    ('line', 's')),
     }
 
     
     # __init__:
     #
     def __init__ (self, fname, mode) :
+        self.lock = threading.Lock()
         self.fname = fname
         self.mode = mode
         self.state = JournalState()
@@ -728,15 +737,34 @@ class Journal :
                                        raw_size=kw['raw_size'],
                                        comp_size=kw['comp_size'],
                                        nfiles=kw['nfiles'])
+        elif key == 'STRANGE' :
+            s.stranges.append((kw['source'], kw['line']))
         else :
             assert 0, (key, kw)
         # trace("JOURNAL UPDATE: %s\n%s" %
         #       (key, pprint.pformat(s.asdict())))
 
 
+    # escape:
+    #
+    def escape (self, line) :
+        chars = "\\:\n"
+        out = ''
+        for c in line :
+            if c in chars :
+                out += "\\x%02x" % ord(c)
+            else :
+                out += c
+        return out
+
+
     # record:
     #
     def record (self, key, **kwargs) :
+        with self.lock :
+            self.__record(key, **kwargs)
+
+    def __record (self, key, **kwargs) :
         keyspec = Journal.KEYSPECS[key]
         assert len(kwargs) == len(keyspec), kwargs
         line = [key]
@@ -744,6 +772,7 @@ class Journal :
             pval = kwargs[pname]
             if ptype == 's' :
                 assert isinstance(pval, str)
+                pval = self.escape(pval)
             elif ptype == 'h' :
                 assert check_hrs(pval)
             elif ptype == 'i' :
@@ -759,7 +788,7 @@ class Journal :
         self._update(key, kwargs)
         # write
         # [FIXME] probably some sync needed here
-        #trace("JOURNAL: '%s'" % ':'.join(line))
+        trace("JOURNAL: '%s'" % ':'.join(line))
         tmp = self.fname + '.tmp'
         f = open(tmp, 'wt')
         if os.path.exists(self.fname) :
@@ -1101,7 +1130,7 @@ class MBDumpApp :
         self.journal.record('SELECT', disks=','.join(s.disk for s in sched))
         # schedule the dumps
         for dsched in sched :
-            dsched.cfgdisk.run_hooks('schedule')
+            dsched.cfgdisk.run_hooks('schedule', self.journal)
         for dsched in sched :
             self.__schedule_dump(dsched)
         # run
