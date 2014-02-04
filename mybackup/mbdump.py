@@ -657,6 +657,9 @@ class CfgDisk :
     # configure:
     #
     def configure (self, dconf) :
+        dconf = copy.deepcopy(dconf)
+        self.orig = dconf.pop('orig', '')
+        # [removeme]
         for n, v in dconf.items() :
             setattr(self, n, v)
 
@@ -687,11 +690,21 @@ class CfgDisk :
         return '.tgz'
 
 
+    # [fixme] should be elsewhere
+    def _match_trigger (self, trigger, spec) :
+        for t in spec.split(',') :
+            t = t.strip()
+            if not t : continue
+            if re.match(t, trigger, re.IGNORECASE) :
+                return True
+        return False
+
+        
     # run_hooks:
     #
     def run_hooks (self, trigger, journal) :
         for hook in self.hooks :
-            if trigger not in hook['triggers'].split(',') :
+            if not self._match_trigger(trigger, hook['triggers']) :
                 continue
             script = self.config.scripts[hook['script']]
             trace("%s: '%s' hook: %s" % (self.name, trigger, script.name))
@@ -702,7 +715,8 @@ class CfgDisk :
                  'disk': self.name,
                  'orig': self.orig,
                  'path': self.path,
-                 'vardir': vardir}
+                 'vardir': vardir,
+                 'trigger': trigger}
             cmd.extend(o % a for o in script.options + hook['options'])
             proc = cmdexec(cmd, cwd=self.config.cfgdir,
                            stdout=CMDPIPE, stderr=CMDPIPE)
@@ -1167,7 +1181,8 @@ class MBDumpApp :
         _mkdir(self.config.logdir)
         # open the logfile and say something
         self.__open_logfile()
-        trace("started at %s" % self.config.start_date)
+        trace("started at %s (with pid %d/%d)" %
+              (self.config.start_date, os.getpid(), os.getppid()))
         # acquire the config lock
         try:
             with FLock(self.config.cfglockfile, block=False) :

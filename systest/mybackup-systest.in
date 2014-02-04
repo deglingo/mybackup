@@ -201,7 +201,15 @@ _run_module()
 # st_mbdump
 st_mbdump()
 {
-	"$ST_MBDUMP" ${@} || die "mbdump failed ($?)"
+	local r=0 cmd="\"$ST_MBDUMP\""
+	while test $# -gt 0; do cmd="$cmd \"$1\""; shift; done
+	trace "EXEC: $cmd"
+	if eval "$cmd"; then
+		trace " -> OK"
+	else
+		trace "ERROR: command failed!"
+	fi
+	return $r
 }
 
 

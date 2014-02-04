@@ -6,7 +6,7 @@ DAY0='1979/12/31 00:00:00'
 
 _setup_day_1()
 {
-	st_mkfile "/DISK_1/FILE" -Rs1
+	st_mkfile -r . -d "$1" "/DISK_1/FILE" -Rs1
 }
 
 
@@ -27,7 +27,7 @@ test_crash_setup()
   "scripts": {
     "KILLER": {
       "prog": "./killer",
-      "options": []
+      "options": ["%(trigger)s"]
     }
   },
   "disks": {
@@ -43,10 +43,33 @@ test_crash_setup()
 }
 EOF
 
-	st_mkfile -m755 "/etc/mybackup/TEST/killer" - <<EOF
+	st_mkfile -m755 "/etc/mybackup/CRASH/killer" - <<EOF
 #!/bin/sh
-echo "KILLER!"
+LOGFILE="$ST_ROOTDIR/tmp/killer.log"
+trace() { echo "KILLER: \$*" >>"\$LOGFILE"; }
+trace "======================================================================"
+trace "TRIGGER='\${1}' TARGET='\$MB_TEST_CRASH_TRIGGER'"
+test x"\$1" = x"\$MB_TEST_CRASH_TRIGGER" \
+  || { trace "WRONG TRIGGER, BYE"; exit 0; }
+KPID=\`pidof -x mbdump\`
+pstree -cps \$\$ >>"\$LOGFILE"
+trace "KILLING PID \$KPID"
+#sync; sync; sync; # makes sure all logs are gone ?
+kill -TERM \$KPID || {
+  trace "KILL FAILED! (\$?)" >&2;
+  exit 1; }
+sleep 1 # let it die
+trace "HEY, WHAT AM I DOING HERE?"
+exit 1
 EOF
+}
+
+
+getpid()
+{
+	# [fixme] how to that in bash ?
+    # ( echo $$; ) still returns the parent's pid !?
+	python -c 'import os; print os.getppid();'
 }
 
 
@@ -54,5 +77,8 @@ EOF
 #
 test_crash_main()
 {
-	st_mbdump CRASH
+	st_sync "$ST_RUNDIR/fs/day1" "$ST_ROOTDIR/fs"
+	local r=0
+	MB_TEST_CRASH_TRIGGER='schedule' "$ST_MBDUMP" CRASH || r=$?
+	trace "mbdump status: $r"
 }
