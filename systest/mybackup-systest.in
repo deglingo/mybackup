@@ -182,9 +182,9 @@ _run_module()
 
 	# setup
 	DOMAIN="$mod"
-	MBDUMP="$ST_ROOTDIR/usr/bin/mbdump"
 	ST_RUNDIR="$ST_RUNBASEDIR/$mod"
 	ST_ARG0="$BUILDDIR/$mod" # ?
+	ST_MBDUMP="$ST_ROOTDIR/usr/bin/mbdump"
 	test -d "$ST_RUNDIR" || mkdir -p "$ST_RUNDIR"
 	export PATH="$ST_ROOTDIR/usr/bin:/usr/bin:/bin"
 	export PYTHONPATH="$ST_ROOTDIR/usr/lib/python@PYTHON_VERSION@/site-packages"
@@ -195,6 +195,13 @@ _run_module()
 	eval "${mod}_setup" || die "setup '$mod' failed"
 	cd "$ST_ROOTDIR"
 	eval "${mod}_main" || die "main '$mod' failed"
+}
+
+
+# st_mbdump
+st_mbdump()
+{
+	"$ST_MBDUMP" ${@} || die "mbdump failed ($?)"
 }
 
 

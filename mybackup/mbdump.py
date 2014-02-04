@@ -6,6 +6,8 @@ import logging, codecs, types
 from subprocess import PIPE as CMDPIPE
 from functools import partial
 
+from mybackup.base import *
+
 # debug
 # import mybackup as _debug_mybackup
 # sys.stderr.write("MYBACKUP: %s\n" % _debug_mybackup)
@@ -487,6 +489,8 @@ class Config :
         self.cfgdir = os.path.join(self.system.pkgsysconfdir, self.cfgname)
         self.vardir = self.system.pkgvardir
         self.cfgvardir = os.path.join(self.vardir, self.cfgname)
+        self.lockdir = os.path.join(self.vardir, 'lock') # note global!
+        self.cfglockfile = os.path.join(self.lockdir, self.cfgname + '.lock')
         self.dbdir = os.path.join(self.cfgvardir, 'db')
         self.dbfile = os.path.join(self.dbdir, self.cfgname + '.db') 
         self.journaldir = os.path.join(self.cfgvardir, 'journal')
@@ -1047,6 +1051,7 @@ class MBDumpApp :
         assert len(args) >= 1, args
         self.config.init(args.pop(0))
         # create some directories
+        _mkdir(self.config.lockdir)
         _mkdir(self.config.dbdir)
         _mkdir(self.config.journaldir)
         _mkdir(self.config.dumpdir)
@@ -1055,6 +1060,19 @@ class MBDumpApp :
         # open the logfile and say something
         self.__open_logfile()
         trace("started at %s" % self.config.start_date)
+        # acquire the config lock
+        try:
+            with FLock(self.config.cfglockfile, block=False) :
+                self.__main_L(args)
+        except FLockError as exc:
+            error(exc)
+            error("(this probably means that another mbdump process is running)")
+            sys.exit(1)
+
+
+    # __main_L:
+    #
+    def __main_L (self, args) :
         # open the DB
         self.db = DB(self.config.dbfile)
         # [fixme] select disks
