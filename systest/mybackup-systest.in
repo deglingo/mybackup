@@ -205,14 +205,16 @@ st_mbdump()
 }
 
 
-# st_mkfile [-r ROOT] [-m MODE] [-d DATE] FILENAME [SOURCE]
+# st_mkfile [-f] [-r ROOT] [-m MODE] [-d DATE] FILENAME [-R|-|SOURCE]
 st_mkfile()
 {
-	local fname src= mode= root="$ST_ROOTDIR" date=
-	local opts=`getopt -o 'r:d:m:' -- "${@}"` || die
+	local fname src= mode= root="$ST_ROOTDIR" date= force=0 rand=0 size=1
+	local opts=`getopt -o 'Rfr:d:m:' -- "${@}"` || die
 	eval set -- "$opts"
 	while true; do
 		case "$1" in
+			-R) rand=1; shift;;
+			-f) force=1; shift;;
 			-r) root="$2"; shift 2;;
 			-d) date="$2"; shift 2;;
 			-m) mode="$2"; shift 2;;
@@ -231,11 +233,19 @@ st_mkfile()
 	test x"$dirname" = x"/" || st_mkdir -r "$root" "$dirname"
 	local absname="${root}${fname}"
 	trace "creating file: '$fname' ($absname)"
-	case "$src" in
-		'') ;;
-		-) cat >"$absname";;
-		*) cp "$src" "$absname";;
-	esac
+	test $force -ne 0 || set -C
+	:>"$absname" || die "could not create '$absname'"
+	set +C
+	if test $rand -ne 0; then
+		# [fixme] size
+		st_rand "$size" >"$absname"
+	elif test x"$src" = x; then
+		true
+	elif test x"$src" = x"-"; then
+		cat >"$absname"
+	else
+		cp "$src" "$absname"
+	fi
 	test x"$mode" = x || chmod "$mode" "$absname"
 	test x"$date" = x || touch -d "$date" "$absname"
 }
@@ -273,22 +283,43 @@ st_rand()
 	dd if=/dev/urandom bs=1M count=${1:-1} 2>/dev/null
 }
 
+# st_fakedate [-d DAYS] [-h HOURS] [-r REF=YYYY/MM/DD HH:MM:SS]
 st_fakedate()
 {
-	local days=0 hours=0
-	local opts=`getopt -o 'd:h:' -- "${@}"`
+	local days=0 hours=0 ref='1979/12/31 00:00:00'
+	local opts=`getopt -o 'd:h:r:' -- "${@}"`
 	eval set -- "$opts"
 	while true; do
 		case "$1" in
-			-d) days=$2; shift 2;;
-			-h) hours=$2; shift 2;;
+			-d) days="$2"; shift 2;;
+			-h) hours="$2"; shift 2;;
+			-r) ref="$2"; shift 2;;
 			--) break;;
 			*) die "? $1";;
 		esac
 	done
-	local stamp=`date -d '1979/12/31 00:00:00' '+%s'`
+	local stamp=`date -d "$ref" '+%s'` || die "invalid ref date: '$ref'"
 	stamp=`expr $stamp + $days '*' 86400 + $hours '*' 3600`
 	date -d "@$stamp" "+%Y/%m/%d %H:%M:%S"
+}
+
+
+# st_setup_fs REF-DATE ROOT NDAYS CALLBACK_PREFIX
+st_setup_fs()
+{
+	local oldpwd=`pwd` date="$1" root="$2" ndays="$3" callback="$4" day prev=
+	trace "creating fs in '$root' ($ndays days)"
+	for day in `seq 1 $ndays`; do
+		local daydate=`st_fakedate -r "$date" -d $day`
+		local dir="$root/day${day}"
+		test -d "$dir" || mkdir "$dir"
+		local cmd="${callback}${day} \"$daydate\""
+		test x"$prev" = x || st_sync "$prev" "$dir"
+		prev="$dir"
+		cd "$dir"
+		eval "$cmd" || die "st_setup_fs: callback failed"
+	done
+	trace "st_setup_fs: ok"
 }
 
 
