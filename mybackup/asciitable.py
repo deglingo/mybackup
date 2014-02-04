@@ -2,6 +2,7 @@
 
 __all__ = [
     'Table',
+    'Frame',
 ]
 
 import sys, collections
@@ -54,14 +55,14 @@ class Table :
 
     # __init__:
     #
-    def __init__ (self, nrows, ncols, vpad=1, hpad=1, margins=(1, 1, 1, 1)) :
+    def __init__ (self, nrows, ncols, vpad=0, hpad=0) :
         self.nrows = nrows
         self.ncols = ncols
-        self.vpad = vpad
-        self.hpad = hpad
-        self.margins = Margins(*margins)
         self.cells = [[Cell() for i in range(ncols)]
                       for j in range(nrows)]
+        # note: add 1 row/col constraint for the last separator
+        self.rparams = [LineParams(pad=vpad) for j in range(nrows+1)]
+        self.cparams = [LineParams(pad=hpad) for i in range(ncols+1)]
         self.items = []
 
 
@@ -80,15 +81,41 @@ class Table :
         self.items.append(item)
 
 
+    # vpad_span:
+    #
+    def vpad_span_ (self, row, height) :
+        return sum(p.pad for p in self.rparams[row+1:row+height])
+
+
+    # hpad_span:
+    #
+    def hpad_span_ (self, col, width) :
+        return sum(p.pad for p in self.cparams[col+1:col+width])
+
+
+    # set_vpad:
+    #
+    def set_vpad (self, row, pad) :
+        self.rparams[row].pad = pad
+
+
+    # set_hpad:
+    #
+    def set_hpad (self, col, pad) :
+        self.cparams[col].pad = pad
+
+
     # getlines:
     #
-    def getlines (self) :
+    def getlines (self, debug=False) :
         lrows = [CLayout() for j in range(self.nrows)]
         lcols = [CLayout() for i in range(self.ncols)]
         # apply all item size requests
         for item in self.items :
-            rh = item.height_request - ((item.height-1) * self.vpad)
-            rw = item.width_request - ((item.width-1) * self.hpad)
+            rh = item.height_request \
+              - self.vpad_span_(item.row, item.height)
+            rw = item.width_request \
+              - self.hpad_span_(item.col, item.width)
             if rh > 0 :
                 for j, s in enumerate(split_size(rh, item.height)) :
                     lrows[item.row+j].request_size(s)
@@ -96,54 +123,77 @@ class Table :
                 for i, s in enumerate(split_size(rw, item.width)) :
                     lcols[item.col+i].request_size(s)
         # apply row/col constraints
-        pos = self.margins.top
-        for r in lrows :
-            pos = r.apply(pos) + self.vpad
-        pos = self.margins.left
-        for c in lcols :
-            pos = c.apply(pos) + self.hpad
-        # shrink/expand items if necessary
-        for item in self.items :
-            rh = item.height_request - ((item.height-1) * self.vpad)
-            rw = item.width_request - ((item.width-1) * self.hpad)
-            ah = sum(r.size for r in lrows[item.row:item.row2])
-            aw = sum(c.size for c in lcols[item.col:item.col2])
-            if ah < rh :
-                print("[TODO] shrink item height %s" % item)
-            elif ah > rh :
-                print("[TODO] expand item height %s" % item)
-            if aw < rw :
-                print("[TODO] shrink item width %s" % item)
-            elif aw > rw :
-                print("[TODO] expand item width %s" % item)
+        pos = 0
+        for r in range(self.nrows) :
+            pos = lrows[r].apply(pos) + self.rparams[r].pad
+        pos = 0
+        for c in range(self.ncols) :
+            pos = lcols[c].apply(pos) + self.cparams[c].pad
+        # [fixme] shrink/expand items if necessary
+        # for item in self.items :
+        #     rh = item.height_request - ((item.height-1) * self.vpad)
+        #     rw = item.width_request - ((item.width-1) * self.hpad)
+        #     ah = sum(r.size for r in lrows[item.row:item.row2])
+        #     aw = sum(c.size for c in lcols[item.col:item.col2])
+        #     if ah < rh :
+        #         print("[TODO] shrink item height %s" % item)
+        #     elif ah > rh :
+        #         print("[TODO] expand item height %s" % item)
+        #     if aw < rw :
+        #         print("[TODO] shrink item width %s" % item)
+        #     elif aw > rw :
+        #         print("[TODO] expand item width %s" % item)
         # dump
         char_height = sum(r.size for r in lrows) \
-          + (self.nrows-1) * self.vpad \
-          + self.margins.vertical
+          + self.vpad_span_(-1, self.nrows+2)
         char_width = sum(c.size for c in lcols) \
-          + (self.ncols-1) * self.hpad \
-          + self.margins.horizontal
+          + self.hpad_span_(-1, self.ncols+2)
         print("final size: %dx%d" % (char_height, char_width))
         buf = TextBuffer(char_height, char_width)
         for item in self.items :
             for l, line in enumerate(item.lines) :
-                buf.text(lrows[item.row+l].pos + item.margins.top,
-                         lcols[item.col].pos + item.margins.left,
+                buf.text(lrows[item.row+l].pos + self.rparams[item.row+l].pad + item.margins.top,
+                         lcols[item.col].pos + self.cparams[item.col].pad + item.margins.left,
                          item.justify_line(line,
                                            lcols[item.col2-1].pos2 \
                                            - lcols[item.col].pos \
                                            - item.margins.horizontal))
         # [fixme] borders
         for item in self.items :
-            r1 = lrows[item.row].pos - 1
-            c1 = lcols[item.col].pos - 1
-            r2 = lrows[item.row2-1].pos2
-            c2 = lcols[item.col2-1].pos2
+            r1 = lrows[item.row].pos + self.rparams[item.row].pad - 1
+            c1 = lcols[item.col].pos + self.cparams[item.col].pad - 1
+            r2 = lrows[item.row2-1].pos2 + 1 # why +1 !?
+            c2 = lcols[item.col2-1].pos2 + 1
+            if item.frame & Frame.TOP :
+                buf.hline(r1, c1, c2)
+            if item.frame & Frame.BOTTOM :
+                buf.hline(r2, c1, c2)
+            if item.frame & Frame.LEFT :
+                buf.vline(r1, c1, r2)
+            if item.frame & Frame.RIGHT :
+                buf.vline(r1, c2, r2)
             # print("item %s: box(%d, %d, %d, %d)" %
             #       (item, r1, c1, r2, c2))
-            buf.box(r1, c1, r2, c2)
+            # buf.box(r1, c1, r2, c2)
+        # debug
+        if debug :
+            for row in range(self.nrows) :
+                buf.text_hline(lrows[row].pos, 0, buf.width-1, '#')
+            for col in range(self.ncols) :
+                buf.text_vline(0, lcols[col].pos, buf.height-1, '#')
         # ok
         return buf.getlines()
+
+
+# LineParams:
+#
+class LineParams :
+
+
+    # __init__:
+    #
+    def __init__ (self, pad=0) :
+        self.pad = pad
 
 
 # Border:
@@ -158,6 +208,26 @@ class Border :
     VLINE = UP | DOWN
     HLINE = LEFT | RIGHT
 
+    # CMAP = (
+    #     #      RLDU
+    #     ' ', # 0000
+    #     '|', # 0001
+    #     '|', # 0010
+    #     '|', # 0011
+    #     '-', # 0100
+    #     '+', # 0101
+    #     '+', # 0110
+    #     '+', # 0111
+    #     '-', # 1000
+    #     '+', # 1001
+    #     '+', # 1010
+    #     '+', # 1011
+    #     '-', # 1100
+    #     '+', # 1101
+    #     '+', # 1110
+    #     '+', # 1111
+    # )
+
     CMAP = (
         #      RLDU
         ' ', # 0000
@@ -167,16 +237,30 @@ class Border :
         '-', # 0100
         '+', # 0101
         '+', # 0110
-        '+', # 0111
+        '|', # 0111
         '-', # 1000
         '+', # 1001
         '+', # 1010
-        '+', # 1011
+        '|', # 1011
         '-', # 1100
-        '+', # 1101
-        '+', # 1110
+        '-', # 1101
+        '-', # 1110
         '+', # 1111
     )
+
+
+# Frame:
+#
+class Frame :
+
+    TOP    = 1 << 0
+    LEFT   = 1 << 1
+    BOTTOM = 1 << 2
+    RIGHT  = 1 << 3
+
+    LR = LEFT | RIGHT
+    TB = TOP | BOTTOM
+    FULL = TOP | LEFT | BOTTOM | RIGHT
 
     
 # TextBuffer:
@@ -205,7 +289,7 @@ class TextBuffer :
                 if b == 0 or self.chars[j][i] != ' ' :
                     continue
                 self.chars[j][i] = Border.CMAP[b]
-        return [(''.join(l)+'\n') for l in self.chars]
+        return [(''.join(l)) for l in self.chars]
 
 
     # text:
@@ -213,6 +297,19 @@ class TextBuffer :
     def text (self, row, col, text) :
         for i, c in enumerate(text) :
             self.chars[row][col+i] = c
+
+
+    # text_hline:
+    #
+    def text_hline (self, row, col, col2, char='+') :
+        self.text(row, col, char * (col2-col))
+
+
+    # text_vline:
+    #
+    def text_vline (self, row, col, row2, char='+') :
+        for r in range(row, row2) :
+            self.chars[r][col] = char
 
 
     # box:
@@ -296,7 +393,8 @@ class Item :
 
     # __init__:
     #
-    def __init__ (self, text, row, col, height, width, margins=None, justify='left') :
+    def __init__ (self, text, row, col, height, width, margins=None,
+                  justify='left', frame=0) :
         if margins is None :
             self.margins = Margins(0, 1, 0, 1)
         else :
@@ -310,6 +408,7 @@ class Item :
         self.height = height
         self.width = width
         self.justify = justify
+        self.frame = frame
         # note: these are outside item's box!
         self.row2 = self.row + self.height
         self.col2 = self.col + self.width
@@ -323,5 +422,7 @@ class Item :
             return line
         elif self.justify == 'center' :
             return (' ' * ((width - len(line)) // 2)) + line
+        elif self.justify == 'right' :
+            return (' ' * (width - len(line))) + line
         else :
             assert 0, self.justify

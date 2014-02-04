@@ -293,6 +293,7 @@ def attrdict (tpname, attrs=None, defo=None) :
         '__repr__': _atd_repr,
         '__getattr__': _atd_getattr,
         '__setattr__': _atd_setattr,
+        '__getitem__': _atd_getitem,
         '__deepcopy__': _atd_deepcopy,
         'asdict': _atd_asdict,
         'update': _atd_update,
@@ -323,6 +324,10 @@ def _atd_getattr (s, n) :
         return object.__dict__[n]
     assert (not s._atd__names) or n in s._atd__names, n
     return s.__d[n]
+
+def _atd_getitem (s, n) :
+    assert n[0] != '_' # ?
+    return getattr(s, n)
 
 def _atd_setattr (s, n, v) :
     if n[0] == '_' :
@@ -528,7 +533,15 @@ class Config :
 
     # configure:
     #
-    def configure (self, conf) :
+    def configure (self, conf_) :
+        conf = copy.deepcopy(conf_)
+        self.report_columns = conf.pop('report_columns',
+                                       (r'\title=DISK\%(disk)s',
+                                        r'\title=STATE\center\%(state)s',
+                                        r'\title=RAW SIZE\right\%(raw_hsize)s',
+                                        r'\title=COMP SIZE\right\%(comp_hsize)s',
+                                        r'\title=RATIO\right\%(comp_ratio).2f%%',
+                                        r'\title=FILES\right\%(nfiles)d'))
         self.scripts = dict(
             (n, CfgScript(self, n, sconf))
             for n, sconf in conf.get('scripts', {}).items())
@@ -1105,7 +1118,7 @@ class MBDumpApp :
         self.__post_process(self.journal.summary())
         # report
         title, body = self.__report(self.journal.summary())
-        trace("**  %s  **\n%s" % (title, ''.join(body).rstrip('\n')))
+        trace("**  %s  **\n%s" % (title, '\n'.join(body)))
 
 
     # __setup_logger:
@@ -1321,32 +1334,112 @@ class MBDumpApp :
 
     # __report:
     #
-    def __report (self, info) :
+    def __report (self, info, width=70) :
+        title = self.__report_title(info)
+
+        header = ['HEADER']
+
+        # dumps table
+        dumps = [l.center(70) for l in self.__report_dumps(info)]
+
+        body = header + dumps
+        return title, body
+
+
+    # __report_dumps:
+    #
+    def __report_dumps (self, info) :
+        cols = self.__parse_columns(self.config.report_columns)                
+        table = asciitable.Table(len(info.dumps)+3, len(cols),
+                                 vpad=0, hpad=1)
+        table.set_vpad(0, 1)
+        table.set_vpad(1, 1)
+        table.set_vpad(2, 1)
+        table.set_vpad(len(info.dumps)+2, 1)
+        table.set_vpad(len(info.dumps)+3, 1)
+        # table title
+        table_title = 'DUMP RUN %04d' % info.runid
+        table.add(table_title, 0, 0, 1, len(cols),
+                  frame=asciitable.Frame.FULL, justify='center',)
+        # column titles
+        for col, (title, cfmt, kwargs) in enumerate(cols) :
+            table.add(title, 1, col, margins=(0, 1, 0, 1),
+                      frame=asciitable.Frame.FULL, justify='center')
+        # dump lines
+        nfiles_total, raw_total, comp_total = 0, 0, 0
+        for row, (disk, dump) in enumerate(info.dumps.items()) :
+            nfiles_total += dump.nfiles
+            raw_total += dump.raw_size
+            comp_total += dump.comp_size
+            for col, (t, cfmt, kwargs) in enumerate(cols) :
+                table.add(cfmt % dump, row+2, col,
+                          frame=asciitable.Frame.LR, **kwargs)
+        # total lines (if more than one dump)
+        if len(info.dumps) > 1 :
+            attr_total = {'disk': '',
+                          'state': '',
+                          'nfiles': nfiles_total,
+                          'raw_size': raw_total,
+                          'raw_hsize': human_size(raw_total),
+                          'comp_size': comp_total,
+                          'comp_hsize': human_size(comp_total),
+                          'comp_ratio': comp_total * 100.0 / raw_total}
+            for col, (t, f, k) in enumerate(cols) :
+                text = (f % attr_total).strip()
+                table.add(text, row+3, col,
+                          frame=asciitable.Frame.FULL, **k)
+        # ok
+        return table.getlines(debug=0)
+
+
+    # __parse_columns:
+    #
+    def __parse_columns (self, colspecs) :
+        cols = []
+        for cspec in colspecs :
+            #trace("CSPEC: '%s'" % cspec)
+            title = ''
+            kwargs = {}
+            while cspec and cspec[0] == "\\" :
+                end = cspec.find("\\", 1)
+                if end < 0 :
+                    cspec = cspec[1:]
+                    break
+                attr = cspec[1:end]
+                cspec = cspec[end:]
+                eq = attr.find('=')
+                if eq >= 0 :
+                    atname, atval = attr[:eq], attr[eq+1:]
+                else :
+                    atname, atval = attr, ''
+                if atname == 'title' :
+                    title = atval
+                elif atname == 'left' :
+                    kwargs['justify'] = left
+                elif atname == 'right' :
+                    kwargs['justify'] = 'right'
+                elif atname == 'center' :
+                    kwargs['justify'] = 'center'
+                else :
+                    assert 0, (atname, atval)
+            cols.append((title, cspec, kwargs))
+            #trace(" -> %s" % repr(cols[-1]))
+        return cols
+        
+
+    # __report_title:
+    #
+    def __report_title (self, info) :
         mark = '--'
         title = "%(package)s '%(config)s' REPORT %(status_mark)s %(date)s" \
           % {'package': self.config.system.PACKAGE.upper(),
              'config': info.config,
              'status_mark': mark,
              'date': hrs2date(info.hrs)}
+        return title
 
-        header = ['HEADER\n']
-
-        # dumps table
-        userfmt = ('disk', 'state', 'nfiles', 'raw_hsize', 'comp_hsize', 'comp_ratio')
-        table = asciitable.Table(len(info.dumps)+1, len(userfmt))
-        title = 'DUMP RUN %04d' % info.runid
-        table.add(title, 0, 0, 1, len(userfmt), justify='center')
-        for row, (disk, dump) in enumerate(info.dumps.items()) :
-            for col, f in enumerate(userfmt) :
-                table.add(str(getattr(dump, f)), row+1, col)
-        dumps = table.getlines()
-
-        body = header + dumps
-        return title, body
-                
 
 # exec
 if __name__ == '__main__' :
     app = MBDumpApp()
     app.main()
-    
