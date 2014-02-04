@@ -7,6 +7,7 @@ from subprocess import PIPE as CMDPIPE
 from functools import partial
 
 from mybackup.base import *
+from mybackup import asciitable
 
 # debug
 # import mybackup as _debug_mybackup
@@ -1320,9 +1321,22 @@ class MBDumpApp :
              'config': info.config,
              'status_mark': mark,
              'date': hrs2date(info.hrs)}
-        body = []
+
+        header = ['HEADER\n']
+
+        # dumps table
+        userfmt = ('disk', 'comp_size', 'state')
+        table = asciitable.Table(len(info.dumps)+1, len(userfmt))
+        title = 'DUMPS HEADER'
+        table.add(title, 0, 0, 1, len(userfmt))
+        for row, (disk, dump) in enumerate(info.dumps.items()) :
+            for col, f in enumerate(userfmt) :
+                table.add(str(getattr(dump, f)), row+1, col)
+        dumps = table.getlines()
+
+        body = header + dumps
         return title, body
-        
+                
 
 # exec
 if __name__ == '__main__' :

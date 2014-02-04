@@ -33,6 +33,7 @@ fi
 
 m4_define([mb_modules], [ \
   __init__ \
+  asciitable \
   base \
   mbdump \
   mbui \
