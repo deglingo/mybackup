@@ -67,7 +67,7 @@ class Table :
 
     # add:
     #
-    def add (self, text, row, col, height=1, width=1) :
+    def add (self, text, row, col, height=1, width=1, **kwargs) :
         assert 0 <= row < self.nrows, row
         assert 0 <= col < self.ncols, col
         assert 0 < height <= (self.nrows-row), height
@@ -78,6 +78,15 @@ class Table :
                 assert self.cells[j][i].item is None
                 self.cells[j][i].item = item
         self.items.append(item)
+        self.set_item_properties(row, col, **kwargs)
+
+
+    # set_item_properties:
+    #
+    def set_item_properties (self, row, col, **kwargs) :
+        item = self.cells[row][col]
+        assert item is not None, (row, col)
+        assert not kwargs, kwargs
 
 
     # getlines:
@@ -125,18 +134,11 @@ class Table :
           + self.margins.horizontal
         print("final size: %dx%d" % (char_height, char_width))
         buf = TextBuffer(char_height, char_width)
-        for j in range(self.nrows) :
-            lr = lrows[j]
-            for i in range(self.ncols) :
-                lc = lcols[i]
-                item = self.cells[j][i].item
-                if item is None or item.row != j or item.col != i :
-                    continue
-                # print("cell[%d][%d] -> %d,%d,%dx%d (%s)" %
-                #       (j, i, lr.pos, lc.pos, lr.size, lc.size,
-                #        '\\n'.join(item.lines)))
-                for l, text in enumerate(item.lines) :
-                    buf.text(lr.pos+l, lc.pos, text)
+        for item in self.items :
+            for l, line in enumerate(item.lines) :
+                buf.text(lrows[item.row+l].pos + item.margins.top,
+                         lcols[item.col].pos + item.margins.left,
+                         line)
         # [fixme] borders
         for item in self.items :
             r1 = lrows[item.row].pos - 1
@@ -300,11 +302,15 @@ class Item :
 
     # __init__:
     #
-    def __init__ (self, text, row, col, height, width) :
+    def __init__ (self, text, row, col, height, width, margins=None) :
+        if margins is None :
+            self.margins = Margins(0, 1, 0, 1)
+        else :
+            self.margins = Margins(*margins)
         self.lines = text.split('\n')
         self.nlines = len(self.lines)
-        self.height_request = self.nlines
-        self.width_request = max(len(l) for l in self.lines)
+        self.height_request = self.nlines + self.margins.vertical
+        self.width_request = max(len(l) for l in self.lines) + self.margins.horizontal
         self.row = row
         self.col = col
         self.height = height
