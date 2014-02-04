@@ -77,8 +77,6 @@ for A in \$@; do
 done
 echo "HOOK: ALL DONE!"
 EOF
-
-	test -d "$ST_ROOTDIR/fs" || st_mkdir /fs
 }
 
 
