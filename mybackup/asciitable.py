@@ -54,7 +54,7 @@ class Table :
 
     # __init__:
     #
-    def __init__ (self, nrows, ncols, vpad=1, hpad=3, margins=(1, 1, 1, 1)) :
+    def __init__ (self, nrows, ncols, vpad=1, hpad=1, margins=(1, 1, 1, 1)) :
         self.nrows = nrows
         self.ncols = ncols
         self.vpad = vpad
