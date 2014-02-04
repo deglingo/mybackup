@@ -882,20 +882,18 @@ class DB :
     # dump:
     #
     def dump (self, depth=0) :
-        trace(("  DB DUMP: %s  " % self).center(120, '*'),
-              depth=depth+1)
-        w = sys.stderr.write
+        lines = []
+        lines.append(("  DB DUMP: %s  " % self).center(120, '*') + '\n')
         for tname, tcols in DB.__TABLES :
             sel = self._execute('select * from %s order by %s' %
                                 (tname, tcols[0][0]))
-            w("%s: %d records\n" % (tname.upper(), len(sel)))
+            lines.append("%s: %d records\n" % (tname.upper(), len(sel)))
             if sel :
-                w("  [ %s ]" % ', '.join(sel[0]._fields))
-                w('\n')
+                lines.append(("  [ %s ]" % ', '.join(sel[0]._fields)) + '\n')
             for row in sel :
-                w("  ( %s )" % ', '.join(str(c) for c in row))
-                w('\n')
-        trace(''.center(120, '*'), depth=depth+1)
+                lines.append(("  ( %s )" % ', '.join(str(c) for c in row)) + '\n')
+        lines.append(''.center(120, '*') + '\n')
+        trace("\n%s" % ''.join(lines), depth=depth+1)
                 
 
     # _execute:
