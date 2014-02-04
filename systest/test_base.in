@@ -43,6 +43,7 @@ test_base_setup()
 
 	st_mkfile "/etc/mybackup/TEST/mybackup.conf" - <<EOF
 {
+  "mailto": "${MYBACKUP_SYSTEST_MAILTO:-}",
   "scripts": {
     "HOOK": {
       "prog": "./HOOK",

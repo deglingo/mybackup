@@ -535,6 +535,7 @@ class Config :
     #
     def configure (self, conf_) :
         conf = copy.deepcopy(conf_)
+        self.mailto = conf.pop('mailto', '')
         self.report_columns = conf.pop('report_columns',
                                        (r'\title=DISK\%(disk)s',
                                         r'\title=STATE\center\%(state)s',
@@ -1119,6 +1120,18 @@ class MBDumpApp :
         # report
         title, body = self.__report(self.journal.summary())
         trace("**  %s  **\n%s" % (title, '\n'.join(body)))
+        # mail
+        for addr in self.config.mailto.split(':') :
+            addr = addr.strip()
+            if not addr : continue
+            trace("sending mail report to '%s'" % addr)
+            proc = cmdexec(["Mail", "-s", title, addr], stdin=CMDPIPE,
+                           universal_newlines=True)
+            proc.stdin.write('\n'.join(body))
+            proc.stdin.write('\n')
+            proc.stdin.close()
+            r = proc.wait()
+            assert r == 0, r
 
 
     # __setup_logger:
