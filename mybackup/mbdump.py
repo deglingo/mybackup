@@ -46,6 +46,24 @@ def warning (msg, depth=0) : _log(logging.WARNING, msg, depth=depth+1)
 def error (msg, depth=0) :   _log(logging.ERROR, msg, depth=depth+1)
 
 
+# LogGlobalFilter:
+#
+class LogGlobalFilter :
+
+
+    SYM = {logging.DEBUG:   '..',
+           logging.INFO :   '--',
+           logging.WARNING: 'WW',
+           logging.ERROR:   'EE'}
+
+    
+    # __call__:
+    #
+    def __call__ (s, r) :
+        setattr(r, 'levelsym', LogGlobalFilter.SYM[r.levelno])
+        return True
+
+
 # LogLevelFilter:
 #
 class LogLevelFilter :
@@ -181,6 +199,8 @@ def cmdexec (cmd, wait=False, check=True, depth=0, **kw) :
     if cwd is None : cwd = os.getcwd()
     trace("%s> %s" % (cwd, ' '.join(cmd)), depth=depth+1)
     proc = subprocess.Popen(cmd, cwd=cwd, **kw)
+    trace("process %s running with pid %d" %
+          (os.path.basename(cmd[0]), proc.pid))
     if not wait :
         return proc
     r = proc.wait()
@@ -1199,6 +1219,7 @@ class MBDumpApp :
     def __setup_logger (self) :
         logger = logging.getLogger('mbdump')
         logger.setLevel(1)
+        logger.addFilter(LogGlobalFilter())
         # console handler
         chdlr = LogConsoleHandler(1)
         self.log_cfilter = LogLevelFilter()
@@ -1232,6 +1253,9 @@ class MBDumpApp :
             break
         fhdlr = logging.FileHandler(logfile)
         fhdlr.setLevel(1)
+        ffmt = LogFormatter(fmt='%(asctime)s %(process)5d [%(levelsym)s] %(message)s',
+                            datefmt='%Y/%m/%d %H:%M:%S')
+        fhdlr.setFormatter(ffmt)
         logger.addHandler(fhdlr)
 
 
