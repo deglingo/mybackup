@@ -114,6 +114,17 @@ class LogLevelFilter :
         return rec.levelno in self.levels
 
 
+# LogFormatter:
+#
+class LogFormatter (logging.Formatter) :
+
+
+    # format_exception:
+    #
+    def format_exception (self, exc_info) :
+        return '\n'.join(format_exception(exc_info))
+
+
 # LogConsoleHandler:
 #
 class LogConsoleHandler (logging.Handler) :
@@ -1220,6 +1231,11 @@ class MBDumpApp :
         chdlr = LogConsoleHandler(1)
         self.log_cfilter = LogLevelFilter()
         chdlr.addFilter(self.log_cfilter)
+        if os.environ.get('MB_LOG_LOCS', '') :
+            cfmt = '%(name)s:%(filename)s:%(lineno)d:%(funcName)s:%(levelname)s: %(message)s'
+        else :
+            cfmt = '%(name)s: %(message)s'
+        chdlr.setFormatter(LogFormatter(cfmt))
         logger.addHandler(chdlr)
         # set defaults from env vars
         self.log_cfilter.enable(logging.DEBUG, bool(os.environ.get('MB_DEBUG')))
