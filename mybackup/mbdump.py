@@ -358,10 +358,10 @@ JournalState = attrdict (
           'stranges': []})
 
 
-# DumpState:
+# DumpInfo:
 #
-_DumpState = attrdict (
-    '_DumpState',
+_DumpInfo = attrdict (
+    '_DumpInfo',
     (),
     defo={'state': 'selected',
           'prevrun': -1,
@@ -369,7 +369,7 @@ _DumpState = attrdict (
           'comp_size': -1,
           'nfiles': -1})
 
-class DumpState (_DumpState) :
+class DumpInfo (_DumpInfo) :
     raw_hsize = property(lambda s: human_size(s.raw_size))
     comp_hsize = property(lambda s: human_size(s.comp_size))
     comp_ratio = property(lambda s: s.comp_size * 100.0 / s.raw_size)
@@ -764,7 +764,7 @@ class Journal :
                      hrs=kw['hrs'])
         elif key == 'SELECT' :
             for d in kw['disks'].split(',') :
-                s.dumps[d] = DumpState(disk=d)
+                s.dumps[d] = DumpInfo(disk=d)
         elif key == 'SCHEDULE' :
             s.dumps[kw['disk']].update(state='scheduled',
                                        prevrun=kw['prevrun'])
