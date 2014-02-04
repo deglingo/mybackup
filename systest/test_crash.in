@@ -1,0 +1,58 @@
+# -*- shell-script -*-
+
+
+DAY0='1979/12/31 00:00:00'
+
+
+_setup_day_1()
+{
+	st_mkfile "/DISK_1/FILE" -Rs1
+}
+
+
+# test_crash_setup:
+#
+test_crash_setup()
+{
+	# setup_fs
+	test "$ST_RUNDIR/fs.stamp-h" -nt "$ST_ARG0" || {
+		rm -rf "$ST_RUNDIR/fs";
+		mkdir "$ST_RUNDIR/fs";
+		st_setup_fs "$DAY0" "$ST_RUNDIR/fs" 1 _setup_day_;
+		date >"$ST_RUNDIR/fs.stamp-h"; }
+
+	st_mkfile "/etc/mybackup/CRASH/mybackup.conf" - <<EOF
+{
+  "mailto": "${MYBACKUP_SYSTEST_MAILTO:-}",
+  "scripts": {
+    "KILLER": {
+      "prog": "./killer",
+      "options": []
+    }
+  },
+  "disks": {
+    "DISK_1": {
+      "path": "$ST_ROOTDIR/fs/DISK_1",
+      "hooks": [{
+        "script": "KILLER",
+        "triggers": ".*",
+        "options": []
+      }]
+    }
+  }
+}
+EOF
+
+	st_mkfile -m755 "/etc/mybackup/TEST/killer" - <<EOF
+#!/bin/sh
+echo "KILLER!"
+EOF
+}
+
+
+# test_crash_main:
+#
+test_crash_main()
+{
+	st_mbdump CRASH
+}
