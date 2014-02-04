@@ -436,7 +436,8 @@ _DumpInfo = attrdict (
 class DumpInfo (_DumpInfo) :
     raw_hsize = property(lambda s: human_size(s.raw_size))
     comp_hsize = property(lambda s: human_size(s.comp_size))
-    comp_ratio = property(lambda s: s.comp_size * 100.0 / s.raw_size)
+    comp_ratio = property(lambda s: (s.comp_size * 100.0 / s.raw_size)
+                          if s.raw_size > 0 else 0.0)
 
 
 # DumpEstimate:
@@ -1518,7 +1519,8 @@ class MBDumpApp :
                           'raw_hsize': human_size(raw_total),
                           'comp_size': comp_total,
                           'comp_hsize': human_size(comp_total),
-                          'comp_ratio': comp_total * 100.0 / raw_total}
+                          'comp_ratio': ((comp_total * 100.0 / raw_total)
+                                         if raw_total > 0 else 0.0)}
             for col, (t, f, k) in enumerate(cols) :
                 text = (f % attr_total).strip()
                 table.add(text, row+3, col,
