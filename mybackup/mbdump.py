@@ -341,6 +341,80 @@ def _atd_deepcopy (s, m) :
     return s.__class__(**kw)
 
 
+# enum:
+#
+def enum (tpname, fields) :
+    byname, byvalue = {}, {}
+    tpdict = {'byname': types.MappingProxyType(byname),
+              'byvalue': types.MappingProxyType(byvalue),
+              'check': partial(_enum_check, tpname, byname, byvalue),
+              'fixint': partial(_enum_fixint, tpname, byname, byvalue),
+              'fixstr': partial(_enum_fixstr, tpname, byname, byvalue)}
+    for value, name in enumerate(fields) :
+        byname[name] = value
+        byvalue[value] = name
+        tpdict[name.upper()] = value
+    tp = type(tpname, (object,), tpdict)
+    return tp
+
+
+# _enum_check:
+#
+def _enum_check (tpname, byname, byvalue, v) :
+    if isinstance(v, int) :
+        if v in byvalue :
+            return v
+        raise ValueError("invalid '%s' enum value: %d" % (tpname, v))
+    elif isinstance(v, str) :
+        v = v.lower()
+        if v in byname :
+            return v
+        raise ValueError("invalid '%s' enum value: '%s'" % (tpname, v))
+    else :
+        raise TypeError("invalid '%s' : %s" % (tpname, v))
+
+
+# _enum_fixint:
+#
+def _enum_fixint (tpname, byname, byvalue, v) :
+    _enum_check(tpname, byname, byvalue, v)
+    if isinstance(v, str) :
+        return byname[v.lower()]
+    elif isinstance(v, int) :
+        return v
+    assert 0
+
+
+# _enum_fixstr:
+#
+def _enum_fixstr (tpname, byname, byvalue, v) :
+    _enum_check(tpname, byname, byvalue, v)
+    if isinstance(v, str) :
+        return v
+    elif isinstance(v, int) :
+        return byvalue[v]
+    assert 0
+
+    
+# DumpState:
+#
+_DumpState = enum(
+    '_DumpState',
+    ('ok', 'partial', 'failed', 'broken',
+     'selected', 'scheduled', 'started'))
+
+class DumpState (_DumpState) :
+    
+    @staticmethod
+    def adapt (*args) :
+        assert 0, args
+
+    @staticmethod
+    def convert (value) :
+        # [fixme] is it normal to get bytes objects from sq3 ?
+        return DumpState.fixstr(value.decode())
+
+
 # DumpSched:
 #
 DumpSched = attrdict('DumpSched', ())
@@ -363,7 +437,7 @@ JournalState = attrdict (
 _DumpInfo = attrdict (
     '_DumpInfo',
     (),
-    defo={'state': 'selected',
+    defo={'state': DumpState.SELECTED,
           'prevrun': -1,
           'raw_size': -1,
           'comp_size': -1,
@@ -766,13 +840,13 @@ class Journal :
             for d in kw['disks'].split(',') :
                 s.dumps[d] = DumpInfo(disk=d)
         elif key == 'SCHEDULE' :
-            s.dumps[kw['disk']].update(state='scheduled',
+            s.dumps[kw['disk']].update(state=DumpState.SCHEDULED,
                                        prevrun=kw['prevrun'])
         elif key == 'DUMP-START' :
-            s.dumps[kw['disk']].update(state='started',
+            s.dumps[kw['disk']].update(state=DumpState.STARTED,
                                        fname=kw['fname'])
         elif key == 'DUMP-FINISHED' :
-            s.dumps[kw['disk']].update(state=kw['state'],
+            s.dumps[kw['disk']].update(state=DumpState.check(kw['state']),
                                        raw_size=kw['raw_size'],
                                        comp_size=kw['comp_size'],
                                        nfiles=kw['nfiles'])
@@ -852,7 +926,7 @@ class DB :
                    ('disk', 'text'),
                    ('runid', 'references runs(runid)'),
                    ('prevrun', 'references runs(runid)'),
-                   ('state', 'text'),
+                   ('state', 'dumpstate'),
                    ('fname', 'text'),
                    ('raw_size', 'int'),
                    ('comp_size', 'int'),
@@ -861,6 +935,9 @@ class DB :
 
 
     __tpcache = {}
+
+    # [fixme] how to adapt DumpState
+    sqlite3.register_converter('dumpstate', DumpState.convert)
 
 
     # __row:
@@ -881,7 +958,7 @@ class DB :
             _numbered_backup(fname)
         else :
             open(fname, 'wt').close()
-        self.con = sqlite3.connect(self.fname)
+        self.con = sqlite3.connect(self.fname, detect_types=sqlite3.PARSE_DECLTYPES)
         self.con.row_factory = self.__row
         self._init()
 
