@@ -15,6 +15,7 @@ sysconf.py: sysconf.py.in sysconf.sed
 sysconf.sed: Makefile
 	(   echo "s,%PACKAGE%,$(PACKAGE),g"; \
 		echo "s,%pkgsysconfdir%,$(pkgsysconfdir),g"; \
+		echo "s,%pkglocalstatedir%,$(pkglocalstatedir),g"; \
 		echo "s,%pkgvardir%,$(pkgvardir),g"; \
 	) >$@.tmp
 	mv -f $@.tmp $@

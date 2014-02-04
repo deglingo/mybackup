@@ -3,7 +3,8 @@
 import types
 
 SYSCONF = types.MappingProxyType({
-    'PACKAGE':       '%PACKAGE%',
-    'pkgsysconfdir': '%pkgsysconfdir%',
-    'pkgvardir':     '%pkgvardir%',
+    'PACKAGE':          '%PACKAGE%',
+    'pkgsysconfdir':    '%pkgsysconfdir%',
+    'pkglocalstatedir': '%pkglocalstatedir%',
+    'pkgvardir':        '%pkgvardir%',
 })

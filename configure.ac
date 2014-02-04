@@ -5,8 +5,10 @@ AM_INIT_AUTOMAKE
 
 # some default paths
 AC_SUBST([pkgsysconfdir], '${sysconfdir}/${PACKAGE}')
-AC_SUBST([vardir], '${prefix}/var')
-AC_SUBST([pkgvardir], '${vardir}/${PACKAGE}')
+AC_SUBST([pkglocalstatedir], '${localstatedir}/${PACKAGE}')
+# [removeme]
+AC_SUBST([vardir], '${localstatedir}')
+AC_SUBST([pkgvardir], '${pkglocalstatedir}')
 
 AC_PROG_LN_S
 
