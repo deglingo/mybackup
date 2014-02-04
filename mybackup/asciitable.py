@@ -4,7 +4,7 @@ __all__ = [
     'Table',
 ]
 
-import sys
+import sys, collections
 
 
 COW = r"""
@@ -38,6 +38,15 @@ def split_size (size, num) :
 #         print("split(%2d, %2d) -> %s" % (s, n, ', '.join('%2d' % c for c in r)))
 
 
+# Margins:
+#
+_Margins = collections.namedtuple('_Margins', ('top', 'left', 'bottom', 'right'))
+
+class Margins (_Margins) :
+    vertical = property(lambda s: s.top + s.bottom)
+    horizontal = property(lambda s: s.left + s.right)
+
+
 # Table:
 #
 class Table :
@@ -45,20 +54,24 @@ class Table :
 
     # __init__:
     #
-    def __init__ (self, nrows, ncols, vpad=1, hpad=3) :
+    def __init__ (self, nrows, ncols, vpad=1, hpad=3, margins=(1, 1, 1, 1)) :
         self.nrows = nrows
         self.ncols = ncols
         self.vpad = vpad
         self.hpad = hpad
-        self.margins = (1, 1, 1, 1) # top, left, bottom, right
-        self.cells = [[Cell() for i in range(nrows)]
-                      for j in range(ncols)]
+        self.margins = Margins(*margins)
+        self.cells = [[Cell() for i in range(ncols)]
+                      for j in range(nrows)]
         self.items = []
 
 
     # add:
     #
     def add (self, text, row, col, height=1, width=1) :
+        assert 0 <= row < self.nrows, row
+        assert 0 <= col < self.ncols, col
+        assert 0 < height <= (self.nrows-row), height
+        assert 0 < width <= (self.ncols-col), width
         item = Item(text, row, col, height, width)
         for j in range(row, row+height) :
             for i in range(col, col+width) :
@@ -83,10 +96,10 @@ class Table :
                 for i, s in enumerate(split_size(rw, item.width)) :
                     lcols[item.col+i].request_size(s)
         # apply row/col constraints
-        pos = self.margins[0]
+        pos = self.margins.top
         for r in lrows :
             pos = r.apply(pos) + self.vpad
-        pos = self.margins[1]
+        pos = self.margins.left
         for c in lcols :
             pos = c.apply(pos) + self.hpad
         # shrink/expand items if necessary
@@ -106,10 +119,10 @@ class Table :
         # dump
         char_height = sum(r.size for r in lrows) \
           + (self.nrows-1) * self.vpad \
-          + self.margins[0] + self.margins[2]
+          + self.margins.vertical
         char_width = sum(c.size for c in lcols) \
           + (self.ncols-1) * self.hpad \
-          + self.margins[1] + self.margins[3]
+          + self.margins.horizontal
         print("final size: %dx%d" % (char_height, char_width))
         buf = TextBuffer(char_height, char_width)
         for j in range(self.nrows) :
