@@ -6,17 +6,17 @@ DAY0='1979/12/31 00:00:00'
 
 _setup_day_1()
 {
-	local date="$1"
-	st_mkfile -r . -d "$date" "/DISK_1/FILE_1A" -R
-	st_mkfile -r . -d "$date" "/DISK_1/FILE_1B" -R
-	st_mkfile -r . -d "$date" "/DISK_1/FILE_1C" -R
-	st_mkfile -r . -d "$date" "/DISK_2/FILE_2A" -R
+	local date="$1" size="${TEST_MIRROR_FSIZE:-1}"
+	st_mkfile -r . -d "$date" -s "$size" "/DISK_1/FILE_1A" -R
+	st_mkfile -r . -d "$date" -s "$size" "/DISK_1/FILE_1B" -R
+	st_mkfile -r . -d "$date" -s "$size" "/DISK_1/FILE_1C" -R
+	st_mkfile -r . -d "$date" -s "$size" "/DISK_2/FILE_2A" -R
 	# ? touch -d "$date" "$dir/DISK_1" "$dir/DISK_2"
 }
 
 _setup_day_2()
 {
-	local date="$1"
+	local date="$1" size="${TEST_MIRROR_FSIZE:-1}"
 	# don't touch 1A, modify 1B, delete 1C and create 1D
 	st_mkfile -f -r . -d "$date" "/DISK_1/FILE_1B" -R
 	rm DISK_1/FILE_1C
@@ -25,7 +25,7 @@ _setup_day_2()
 
 _setup_day_3()
 {
-	local date="$1"
+	local date="$1" size="${TEST_MIRROR_FSIZE:-1}"
 	# [todo]
 }
 
@@ -34,10 +34,12 @@ _setup_day_3()
 #
 test_base_setup()
 {
-	#setup_fs
-	rm -rf "$ST_RUNDIR/fs"
-	mkdir "$ST_RUNDIR/fs"
-	st_setup_fs "$DAY0" "$ST_RUNDIR/fs" 3 _setup_day_
+	# setup_fs
+	test "$ST_RUNDIR/fs.stamp-h" -nt "$ST_ARG0" || {
+		rm -rf "$ST_RUNDIR/fs";
+		mkdir "$ST_RUNDIR/fs";
+		st_setup_fs "$DAY0" "$ST_RUNDIR/fs" 3 _setup_day_;
+		date >"$ST_RUNDIR/fs.stamp-h"; }
 
 	st_mkfile "/etc/mybackup/TEST/mybackup.conf" - <<EOF
 {

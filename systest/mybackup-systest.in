@@ -205,15 +205,16 @@ st_mbdump()
 }
 
 
-# st_mkfile [-f] [-r ROOT] [-m MODE] [-d DATE] FILENAME [-R|-|SOURCE]
+# st_mkfile [-f] [-r ROOT] [-m MODE] [-d DATE] [-s size] FILENAME [-R|-|SOURCE]
 st_mkfile()
 {
 	local fname src= mode= root="$ST_ROOTDIR" date= force=0 rand=0 size=1
-	local opts=`getopt -o 'Rfr:d:m:' -- "${@}"` || die
+	local opts=`getopt -o 'Rs:fr:d:m:' -- "${@}"` || die
 	eval set -- "$opts"
 	while true; do
 		case "$1" in
 			-R) rand=1; shift;;
+			-s) size="$2"; shift 2;;
 			-f) force=1; shift;;
 			-r) root="$2"; shift 2;;
 			-d) date="$2"; shift 2;;
