@@ -110,11 +110,11 @@ main()
 	global_setup
 	for mod in $MB_SYSTEST_MODULES; do
 		nruns=`expr $nruns + 1`
-		info -n " - $mod ... "
+		info -n " - $mod ..."
 		if run_module "$mod"; then
-			info -c "OK"
+			info -c " OK"
 		else
-			info -c "FAILED!"
+			info -c " FAILED!"
 			errs=`expr $errs + 1`
 			errlist="$errlist $mod"
 		fi

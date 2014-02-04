@@ -148,7 +148,6 @@ class Table :
           + self.vpad_span_(-1, self.nrows+2)
         char_width = sum(c.size for c in lcols) \
           + self.hpad_span_(-1, self.ncols+2)
-        print("final size: %dx%d" % (char_height, char_width))
         buf = TextBuffer(char_height, char_width)
         for item in self.items :
             for l, line in enumerate(item.lines) :

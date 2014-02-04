@@ -40,51 +40,10 @@ def _log (lvl, msg, depth=0) :
                           func=fn, extra=None, sinfo=None)
     logger.handle(r)
         
-def trace (msg, depth=0) : _log(logging.DEBUG, msg, depth=depth+1)
-def error (msg, depth=0) : _log(logging.ERROR, msg, depth=depth+1)
-
-
-# Log levels:
-#
-class LogLevel :
-
-
-    __levels = {}
-    __byname = {}
-
-    
-    # register:
-    #
-    @staticmethod
-    def register (lvl, name, iserr) :
-        assert lvl not in LogLevel.__levels, lvl
-        assert name not in LogLevel.__byname, name
-        linfo = types.MappingProxyType({'level': lvl,
-                                        'name': name,
-                                        'iserr': iserr})
-        LogLevel.__levels[lvl] = LogLevel.__byname[name] = linfo
-
-
-    # list_levels:
-    #
-    @staticmethod
-    def list_levels () :
-        return [l['level'] for l in LogLevel.__levels.values()]
-
-
-    # by_level:
-    #
-    @staticmethod
-    def by_level (lvl) :
-        return LogLevel.__levels[lvl]
-
-
-# Register levels
-LogLevel.register(logging.DEBUG, 'DEBUG', False)
-LogLevel.register(logging.INFO, 'INFO', False)
-LogLevel.register(logging.WARNING, 'WARNING', True)
-LogLevel.register(logging.ERROR, 'ERROR', True)
-LogLevel.register(logging.CRITICAL, 'CRITICAL', True)
+def trace (msg, depth=0) :   _log(logging.DEBUG, msg, depth=depth+1)
+def info  (msg, depth=0) :   _log(logging.INFO,  msg, depth=depth+1)
+def warning (msg, depth=0) : _log(logging.WARNING, msg, depth=depth+1)
+def error (msg, depth=0) :   _log(logging.ERROR, msg, depth=depth+1)
 
 
 # LogLevelFilter:
@@ -95,13 +54,13 @@ class LogLevelFilter :
     # __init__:
     #
     def __init__ (self) :
-        self.levels = set(LogLevel.list_levels())
+        self.levels = set((logging.DEBUG, logging.INFO, logging.WARNING,
+                           logging.ERROR, logging.CRITICAL))
 
 
     # enable:
     #
     def enable (self, lvl, enab=True) :
-        assert LogLevel.by_level(lvl)
         if enab :
             self.levels.add(lvl)
         else :
@@ -217,10 +176,10 @@ def human_size (s) :
 
 # cmdexec:
 #
-def cmdexec (cmd, wait=False, check=True, **kw) :
+def cmdexec (cmd, wait=False, check=True, depth=0, **kw) :
     cwd = kw.pop('cwd', None)
     if cwd is None : cwd = os.getcwd()
-    trace("%s> %s" % (cwd, ' '.join(cmd)))
+    trace("%s> %s" % (cwd, ' '.join(cmd)), depth=depth+1)
     proc = subprocess.Popen(cmd, cwd=cwd, **kw)
     if not wait :
         return proc
@@ -359,8 +318,8 @@ def enum (tpname, fields) :
     tpdict = {'byname': types.MappingProxyType(byname),
               'byvalue': types.MappingProxyType(byvalue),
               'check': partial(_enum_check, tpname, byname, byvalue),
-              'fixint': partial(_enum_fixint, tpname, byname, byvalue),
-              'fixstr': partial(_enum_fixstr, tpname, byname, byvalue)}
+              'toint': partial(_enum_toint, tpname, byname, byvalue),
+              'tostr': partial(_enum_tostr, tpname, byname, byvalue)}
     for value, name in enumerate(fields) :
         byname[name] = value
         byvalue[value] = name
@@ -385,9 +344,9 @@ def _enum_check (tpname, byname, byvalue, v) :
         raise TypeError("invalid '%s' : %s" % (tpname, v))
 
 
-# _enum_fixint:
+# _enum_toint:
 #
-def _enum_fixint (tpname, byname, byvalue, v) :
+def _enum_toint (tpname, byname, byvalue, v) :
     _enum_check(tpname, byname, byvalue, v)
     if isinstance(v, str) :
         return byname[v.lower()]
@@ -396,9 +355,9 @@ def _enum_fixint (tpname, byname, byvalue, v) :
     assert 0
 
 
-# _enum_fixstr:
+# _enum_tostr:
 #
-def _enum_fixstr (tpname, byname, byvalue, v) :
+def _enum_tostr (tpname, byname, byvalue, v) :
     _enum_check(tpname, byname, byvalue, v)
     if isinstance(v, str) :
         return v
@@ -423,7 +382,7 @@ class DumpState (_DumpState) :
     @staticmethod
     def convert (value) :
         # [fixme] is it normal to get bytes objects from sq3 ?
-        return DumpState.fixstr(value.decode())
+        return DumpState.tostr(value.decode())
 
 
 # DumpSched:
@@ -714,6 +673,7 @@ class CfgDisk :
             if trigger not in hook['triggers'].split(',') :
                 continue
             script = self.config.scripts[hook['script']]
+            trace("%s: '%s' hook: %s" % (self.name, trigger, script.name))
             vardir = os.path.join(self.config.scriptsvardir, script.name)
             _mkdir(vardir)
             cmd = [script.prog]
@@ -725,7 +685,7 @@ class CfgDisk :
             cmd.extend(o % a for o in script.options + hook['options'])
             proc = cmdexec(cmd, cwd=self.config.cfgdir,
                            stdout=CMDPIPE, stderr=CMDPIPE)
-            name = 'hook:%s:%s' % (trigger, self.name)
+            name = 'hook.%s.%s.%s' % (self.name, trigger, script.name)
             parser = StrangeParser(name, journal)
             pout = PipeThread(name, proc.stdout, (),
                               line_handler=parser, started=True)
@@ -785,7 +745,7 @@ class StrangeParser :
     def __call__ (self, line) :
         line = line.strip()
         if not line : return
-        trace("STRANGE:%s: %s" % (self.name, line))
+        #trace("STRANGE:%s: %s" % (self.name, line))
         self.journal.record('STRANGE', source=self.name, line=line)
 
 
@@ -895,7 +855,7 @@ class Journal :
         for pname, ptype in keyspec :
             pval = kwargs[pname]
             if ptype == 's' :
-                assert isinstance(pval, str)
+                assert isinstance(pval, str), (key, pname, pval)
                 pval = self.escape(pval)
             elif ptype == 'h' :
                 assert check_hrs(pval)
@@ -912,7 +872,7 @@ class Journal :
         self._update(key, kwargs)
         # write
         # [FIXME] probably some sync needed here
-        trace("JOURNAL: %s: '%s'" % (key, ', '.join("'%s'" % w for w in line)))
+        trace("JOURNAL:%s: %s" % (key, ', '.join("'%s'" % w for w in line[1:])))
         tmp = self.fname + '.tmp'
         f = open(tmp, 'wt')
         if os.path.exists(self.fname) :
@@ -989,11 +949,17 @@ class DB :
         self._commit()
 
 
+    # __repr__:
+    #
+    def __repr__ (self) :
+        return '<%s "%s">' % (self.__class__.__name__, self.fname)
+
+
     # dump:
     #
     def dump (self, depth=0) :
         lines = []
-        lines.append(("  DB DUMP: %s  " % self).center(120, '*') + '\n')
+        lines.append(("  %s  " % self).center(120, '=') + '\n')
         for tname, tcols in DB.__TABLES :
             sel = self._execute('select * from %s order by %s' %
                                 (tname, tcols[0][0]))
@@ -1002,9 +968,9 @@ class DB :
                 lines.append(("  [ %s ]" % ', '.join(sel[0]._fields)) + '\n')
             for row in sel :
                 lines.append(("  ( %s )" % ', '.join(str(c) for c in row)) + '\n')
-        lines.append(''.center(120, '*') + '\n')
-        trace("\n%s" % ''.join(lines), depth=depth+1)
-                
+        lines.append(''.center(120, '=') + '\n')
+        trace("DBDUMP:\n%s" % ''.join(lines), depth=depth+1)
+
 
     # _execute:
     #
@@ -1114,7 +1080,7 @@ class Index :
     # __call__:
     #
     def __call__ (self, line) :
-        trace("INDEX: %s" % line.rstrip())
+        #trace("INDEX: %s" % line.rstrip())
         self.f.write(line)
         self.count += 1
 
@@ -1199,8 +1165,10 @@ class MBDumpApp :
         # [fixme] select disks
         sched = self.__select_disks(args)
         if not sched :
-            trace("no disk selected, bye")
+            info("no disk selected, bye")
             return
+        info("selected %d disks: %s" %
+             (len(sched), ', '.join(d.disk for d in sched)))
         # go
         self.__process(sched)
         # cleanup
@@ -1212,7 +1180,7 @@ class MBDumpApp :
         for addr in self.config.mailto.split(':') :
             addr = addr.strip()
             if not addr : continue
-            trace("sending mail report to '%s'" % addr)
+            info("sending mail report to '%s'" % addr)
             proc = cmdexec(["Mail", "-s", title, addr], stdin=CMDPIPE,
                            universal_newlines=True)
             proc.stdin.write('\n'.join(body))
@@ -1220,6 +1188,10 @@ class MBDumpApp :
             proc.stdin.close()
             r = proc.wait()
             assert r == 0, r
+        # [TODO] roll the journal
+        pass
+        # ok
+        info("all done, bye!")
 
 
     # __setup_logger:
@@ -1234,12 +1206,12 @@ class MBDumpApp :
         if os.environ.get('MB_LOG_LOCS', '') :
             cfmt = '%(name)s:%(filename)s:%(lineno)d:%(funcName)s:%(levelname)s: %(message)s'
         else :
-            cfmt = '%(name)s: %(message)s'
+            cfmt = '%(name)s:%(levelname)s: %(message)s'
         chdlr.setFormatter(LogFormatter(cfmt))
         logger.addHandler(chdlr)
         # set defaults from env vars
         self.log_cfilter.enable(logging.DEBUG, bool(os.environ.get('MB_DEBUG')))
-        self.log_cfilter.enable(logging.INFO, bool(os.environ.get('MB_VERBOSE')))
+        self.log_cfilter.enable(logging.INFO)
 
 
     # __open_logfile:
@@ -1266,6 +1238,7 @@ class MBDumpApp :
     # __select_disks:
     #
     def __select_disks (self, args) :
+        trace("selecting disks (%d args: %s)" % (len(args), args))
         if args :
             disklist = [self.config.disks[d] for d in args]
         else :
@@ -1301,8 +1274,7 @@ class MBDumpApp :
         self.journal.record('START', config=self.config.cfgname, runid=self.runid, hrs=self.config.start_hrs)
         self.journal.record('SELECT', disks=','.join(s.disk for s in sched))
         # schedule the dumps
-        for dsched in sched :
-            dsched.cfgdisk.run_hooks('schedule', self.journal)
+        self.trigger_hooks('schedule', [d.cfgdisk for d in sched])
         for dsched in sched :
             self.__schedule_dump(dsched)
         # run
@@ -1310,12 +1282,20 @@ class MBDumpApp :
             self.__process_dump(dsched)
 
 
+    # trigger_hooks:
+    #
+    def trigger_hooks (self, trigger, disklist) :
+        trace("triggering all '%s' hooks" % trigger)
+        for disk in disklist :
+            disk.run_hooks(trigger, self.journal)
+
+
     # __schedule_dump:
     #
     def __schedule_dump (self, dsched) :
-        trace("schedule %s" % dsched)
+        trace("%s: scheduling dump" % dsched.disk)
         cycle = self.db.get_current_cycle(dsched.disk)
-        trace("current cycle: %d dumps:" % len(cycle))
+        trace("%s: %d dumps in current cycle" % (dsched.disk, len(cycle)))
         for d in cycle : trace(" - %s" % repr(d))
         if cycle :
             estims = [self.__estim_dump(dsched, None)]
@@ -1325,10 +1305,14 @@ class MBDumpApp :
             for e in estims :
                 if select is None or select.est > e.est :
                     select = e
-            trace("selected best estimate: %s" % repr(select))
-            dsched.update(prevrun=select.prev)
+            if select is None :
+                warning("%s: could not get estimates, full dump forced" % dsched.disk)
+                dsched.update(prevrun=0)
+            else :
+                info("%s: got best estimate: %s" % (dsched.disk, select))
+                dsched.update(prevrun=select.prev)
         else :
-            trace("no cycle found, forcing full dump")
+            info("%s: no cycle found, full dump forced" % dsched.disk)
             dsched.update(prevrun=0)
             
         self.journal.record('SCHEDULE', disk=dsched.disk, prevrun=dsched.prevrun)
@@ -1338,14 +1322,16 @@ class MBDumpApp :
     #
     def __estim_dump (self, dsched, prev) :
         trace("[TODO] estim(%s, %s)" % (dsched.disk, prev))
-        prevrun = (0 if prev is None else prev.runid)
-        return DumpEstimate(prev=prevrun, raw=100, comp=100, est=prevrun*10)
+        return None
+        # prevrun = (0 if prev is None else prev.runid)
+        # return DumpEstimate(prev=prevrun, raw=100, comp=100, est=prevrun*10)
             
 
     # __process_dump:
     #
     def __process_dump (self, dsched) :
-        trace("process: %s" % dsched)
+        cdisk = dsched.cfgdisk
+        info("%s: starting dump (%s)" % (cdisk.name, cdisk.path))
         # make a filename
         destbase = 'mbdump.%s.%s.%s' % (self.config.cfgname, dsched.disk,
                                         self.config.start_hrs)
@@ -1353,22 +1339,29 @@ class MBDumpApp :
         destfull = os.path.join(self.config.partdir, destbase+destext)
         # instantiate a dumper
         dumper = dsched.cfgdisk.get_dumper()
+        trace("dumper: %s" % dumper)
         # looks like we're ready
         self.journal.record('DUMP-START', disk=dsched.disk, fname=destbase+destext)
         procs = []
         pipes = []
         # open dest file and index
+        trace("temp dump file: '%s'" % destfull)
         fdest = open(destfull, 'wb')
         index = Index('/dev/null')
-        # filters
+        # [fixme] filters
+        trace("%s: starting the filters" % cdisk.name)
         filters = [cmdexec(['gzip'], stdin=CMDPIPE, stdout=CMDPIPE)]
         # start the dumper
+        trace("%s: starting the dumper" % cdisk.name)
         proc_dump = dumper.start(dsched.cfgdisk.path)
+        trace("%s: dumper running with pid %d" % (cdisk.name, proc_dump.pid))
         procs.append(proc_dump)
         p_dump = PipeThread('dumper', proc_dump.stdout, ())
         pipes.append(p_dump)
         # start the index
+        trace("%s: starting the index" % cdisk.name)
         proc_index = dumper.start_index()
+        trace("%s: index running with pid %d" % (cdisk.name, proc_index.pid))
         procs.append(proc_index)
         p_dump.plug_output(proc_index.stdin)
         p_index = PipeThread('index', proc_index.stdout, (), line_handler=index)
@@ -1386,16 +1379,23 @@ class MBDumpApp :
         for p in pipes :
             p.start()
         # then wait...
+        trace("%s: waiting for %d pipes..." % (cdisk.name, len(pipes)))
         for p in pipes :
             p.join()
             #trace("%s: OK (%d bytes)" % (p.name, p.data_size))
         # wait processes
+        trace("%s: waiting for %d processes..." % (cdisk.name, len(procs)))
+        state = DumpState.OK
         for p in procs :
             #trace("wait proc: %s" % p)
             r = p.wait()
-            #trace("process %d: %s" % (p.pid, r))
-            assert r == 0, r # [todo]
+            trace("%s: process %d terminated: %d" % (cdisk.name, p.pid, r))
+            if r != 0 :
+                error("%s: process %d failed: %d" % (cdisk.name, p.pid, r))
+                state = DumpState.FAILED
         # close files
+        # [fixme] datasync
+        trace("%s: closing dump file" % cdisk.name)
         fdest.close()
         index.close()
         # collect datas about the dump
@@ -1404,43 +1404,48 @@ class MBDumpApp :
         nfiles = index.count
         # all done
         self.journal.record('DUMP-FINISHED',
-                            disk=dsched.disk, state='ok',
+                            disk=dsched.disk, state=DumpState.tostr(state),
                             raw_size=raw_size, comp_size=comp_size,
                             nfiles=nfiles)
-        trace("dump OK: %s (%s/%s, %d files)" % (dsched.disk,
-                                                 human_size(raw_size),
-                                                 human_size(comp_size),
-                                                 nfiles))
+        info("%s: dump finished: %s (%s/%s, %d files)" %
+             (cdisk.name, state, human_size(raw_size),
+              human_size(comp_size), nfiles))
 
 
     # __post_process:
     #
     def __post_process (self, info) :
         info = self.journal.summary()
-        trace("[TODO] post process:\n%s" % repr(info))
+        trace("post-processing dumps (date=%s, errors=X, warnings=X, stranges=%d)" %
+              (hrs2date(info.hrs), len(info.stranges)))
         # process the dumps
         for dump in info.dumps.values() :
             cfgdisk = self.config.disks[dump.disk]
+            trace("%s: %s" % (cfgdisk.name, dump))
             # rename the dump file
             destbase = cfgdisk.get_dumpname(runid=info.runid, level=9,
                                             prevrun=dump.prevrun, hrs=info.hrs)
             destext = cfgdisk.get_dumpext()
             destfull = os.path.join(self.config.dumpdir, destbase+destext)
             partfull = os.path.join(self.config.partdir, dump.fname)
-            trace("dump: '%s' -> '%s'" % (partfull, destfull))
+            trace("%s: renaming dump: '%s' -> '%s'" %
+                  (cfgdisk.name, partfull, destfull))
             os.rename(partfull, destfull)
             # record the dump in db
+            trace("%s: recording dump in DB" % cfgdisk.name)
             self.db.record_dump(disk=cfgdisk.name, runid=info.runid,
                                 prevrun=dump.prevrun, state=dump.state,
                                 fname=destbase+destext, raw_size=dump.raw_size,
                                 comp_size=dump.comp_size, nfiles=dump.nfiles)
         # debug
+        trace("post-processing done!")
         self.db.dump()
 
 
     # __report:
     #
     def __report (self, info, width=70) :
+        trace("formatting report")
         title = self.__report_title(info)
 
         header = ['HEADER']
