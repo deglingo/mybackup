@@ -805,7 +805,7 @@ class Journal :
         self._update(key, kwargs)
         # write
         # [FIXME] probably some sync needed here
-        trace("JOURNAL: '%s'" % ':'.join(line))
+        trace("JOURNAL: %s: '%s'" % (key, ', '.join("'%s'" % w for w in line)))
         tmp = self.fname + '.tmp'
         f = open(tmp, 'wt')
         if os.path.exists(self.fname) :
