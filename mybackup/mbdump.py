@@ -269,6 +269,16 @@ def date2stamp (date) :
     return check_stamp(int(time.mktime(time.strptime(date, '%Y/%m/%d %H:%M:%S'))))
 
 
+# hrs2date:
+#
+def hrs2date (hrs) :
+    check_hrs(hrs)
+    d = '%s/%s/%s %s:%s:%s' % \
+      (hrs[0:4], hrs[4:6], hrs[6:8],
+       hrs[8:10], hrs[10:12], hrs[12:14])
+    return check_date(d)
+
+
 # attrdict:
 #
 def attrdict (tpname, attrs=None, defo=None) :
@@ -333,7 +343,9 @@ DumpSched = attrdict('DumpSched', ())
 JournalState = attrdict (
     'JournalState', 
     (),
-    defo={'state': 'init',
+    defo={'hrs': 'X',
+          'config': '',
+          'state': 'init',
           'dumps': {},
           'stranges': []})
 
@@ -725,8 +737,9 @@ class Journal :
         s = self.state
         if key == 'START' :
             s.update(state='started',
-                              runid=kw['runid'],
-                              hrs=kw['hrs'])
+                     config=kw['config'],
+                     runid=kw['runid'],
+                     hrs=kw['hrs'])
         elif key == 'SELECT' :
             for d in kw['disks'].split(',') :
                 s.dumps[d] = DumpState(disk=d)
@@ -1084,6 +1097,9 @@ class MBDumpApp :
         self.__process(sched)
         # cleanup
         self.__post_process(self.journal.summary())
+        # report
+        title, body = self.__report(self.journal.summary())
+        trace("**  %s  **\n%s" % (title, ''.join(body).rstrip('\n')))
 
 
     # __setup_logger:
@@ -1296,6 +1312,19 @@ class MBDumpApp :
         # debug
         self.db.dump()
 
+
+    # __report:
+    #
+    def __report (self, info) :
+        mark = '--'
+        title = "%(package)s '%(config)s' REPORT %(status_mark)s %(date)s" \
+          % {'package': self.config.system.PACKAGE.upper(),
+             'config': info.config,
+             'status_mark': mark,
+             'date': hrs2date(info.hrs)}
+        body = []
+        return title, body
+        
 
 # exec
 if __name__ == '__main__' :
