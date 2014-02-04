@@ -72,21 +72,12 @@ class Table :
         assert 0 <= col < self.ncols, col
         assert 0 < height <= (self.nrows-row), height
         assert 0 < width <= (self.ncols-col), width
-        item = Item(text, row, col, height, width)
+        item = Item(text, row, col, height, width, **kwargs)
         for j in range(row, row+height) :
             for i in range(col, col+width) :
                 assert self.cells[j][i].item is None
                 self.cells[j][i].item = item
         self.items.append(item)
-        self.set_item_properties(row, col, **kwargs)
-
-
-    # set_item_properties:
-    #
-    def set_item_properties (self, row, col, **kwargs) :
-        item = self.cells[row][col]
-        assert item is not None, (row, col)
-        assert not kwargs, kwargs
 
 
     # getlines:
@@ -138,7 +129,10 @@ class Table :
             for l, line in enumerate(item.lines) :
                 buf.text(lrows[item.row+l].pos + item.margins.top,
                          lcols[item.col].pos + item.margins.left,
-                         line)
+                         item.justify_line(line,
+                                           lcols[item.col2-1].pos2 \
+                                           - lcols[item.col].pos \
+                                           - item.margins.horizontal))
         # [fixme] borders
         for item in self.items :
             r1 = lrows[item.row].pos - 1
@@ -302,7 +296,7 @@ class Item :
 
     # __init__:
     #
-    def __init__ (self, text, row, col, height, width, margins=None) :
+    def __init__ (self, text, row, col, height, width, margins=None, justify='left') :
         if margins is None :
             self.margins = Margins(0, 1, 0, 1)
         else :
@@ -315,6 +309,19 @@ class Item :
         self.col = col
         self.height = height
         self.width = width
+        self.justify = justify
         # note: these are outside item's box!
         self.row2 = self.row + self.height
         self.col2 = self.col + self.width
+
+
+    # justify_line:
+    #
+    def justify_line (self, line, width) :
+        line = line[:width]
+        if self.justify == 'left' :
+            return line
+        elif self.justify == 'center' :
+            return (' ' * ((width - len(line)) // 2)) + line
+        else :
+            assert 0, self.justify

@@ -1328,7 +1328,7 @@ class MBDumpApp :
         userfmt = ('disk', 'comp_size', 'state')
         table = asciitable.Table(len(info.dumps)+1, len(userfmt))
         title = 'DUMPS HEADER'
-        table.add(title, 0, 0, 1, len(userfmt))
+        table.add(title, 0, 0, 1, len(userfmt), justify='center')
         for row, (disk, dump) in enumerate(info.dumps.items()) :
             for col, f in enumerate(userfmt) :
                 table.add(str(getattr(dump, f)), row+1, col)
