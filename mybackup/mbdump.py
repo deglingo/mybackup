@@ -195,6 +195,8 @@ def _numbered_backup (fname) :
 # human_size:
 #
 def human_size (s) :
+    if s < 0 :
+        return '?'
     for i, u in enumerate(('B', 'K', 'M', 'G')) :
         if s < (1000 * (1024 ** i)) :
             break
@@ -353,14 +355,19 @@ JournalState = attrdict (
 
 # DumpState:
 #
-DumpState = attrdict (
-    'DumpState',
+_DumpState = attrdict (
+    '_DumpState',
     (),
     defo={'state': 'selected',
           'prevrun': -1,
           'raw_size': -1,
           'comp_size': -1,
           'nfiles': -1})
+
+class DumpState (_DumpState) :
+    raw_hsize = property(lambda s: human_size(s.raw_size))
+    comp_hsize = property(lambda s: human_size(s.comp_size))
+    comp_ratio = property(lambda s: s.comp_size * 100.0 / s.raw_size)
 
 
 # DumpEstimate:
@@ -1325,9 +1332,9 @@ class MBDumpApp :
         header = ['HEADER\n']
 
         # dumps table
-        userfmt = ('disk', 'comp_size', 'state')
+        userfmt = ('disk', 'state', 'nfiles', 'raw_hsize', 'comp_hsize', 'comp_ratio')
         table = asciitable.Table(len(info.dumps)+1, len(userfmt))
-        title = 'DUMPS HEADER'
+        title = 'DUMP RUN %04d' % info.runid
         table.add(title, 0, 0, 1, len(userfmt), justify='center')
         for row, (disk, dump) in enumerate(info.dumps.items()) :
             for col, f in enumerate(userfmt) :
