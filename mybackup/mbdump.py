@@ -1247,14 +1247,9 @@ class MBDumpApp :
     def __setup_logger (self) :
         logger = log_setup('mbdump')
         # console handler
-        chdlr = LogConsoleHandler(1)
+        chdlr = LogConsoleHandler()
         self.log_cfilter = LogLevelFilter()
         chdlr.addFilter(self.log_cfilter)
-        if os.environ.get('MB_LOG_LOCS', '') :
-            cfmt = '%(name)s:%(filename)s:%(lineno)d:%(funcName)s:%(levelname)s: %(message)s'
-        else :
-            cfmt = '%(name)s:%(levelname)s: %(message)s'
-        chdlr.setFormatter(LogFormatter(cfmt))
         logger.addHandler(chdlr)
         # set defaults from env vars
         self.log_cfilter.enable(logging.DEBUG, bool(os.environ.get('MB_DEBUG')))

@@ -11,7 +11,17 @@ class MBCleanApp :
     # main:
     #
     def main (self) :
+        self.__log_setup()
+
+
+    # __log_setup:
+    #
+    def __log_setup (self) :
         logger = log_setup('mbclean')
+        self.cfilt = LogLevelFilter()
+        hdlr = LogConsoleHandler()
+        hdlr.addFilter(self.cfilt)
+        logger.addHandler(hdlr)
         trace("HELLO!")
 
 

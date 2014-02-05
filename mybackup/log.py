@@ -130,6 +130,17 @@ class LogConsoleHandler (logging.Handler) :
     raiseExceptions = True
 
 
+    # __init__:
+    #
+    def __init__ (self) :
+        logging.Handler.__init__(self, 1)
+        if os.environ.get('MB_LOG_LOCS', '') :
+            cfmt = '%(name)s:%(filename)s:%(lineno)d:%(funcName)s:%(levelname)s: %(message)s'
+        else :
+            cfmt = '%(name)s:%(levelname)s: %(message)s'
+        self.setFormatter(LogFormatter(cfmt))
+
+
     # emit:
     #
     def emit (self, r) :
