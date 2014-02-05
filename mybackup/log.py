@@ -44,7 +44,7 @@ def _log (lvl, msg, depth=0, exc_info=None) :
     logger = logging.getLogger(_DOMAIN)
     fn, ln, fc, co = traceback.extract_stack()[-(depth+2)]
     fn = os.path.realpath(fn)
-    r = logger.makeRecord('mbdump', lvl, fn=fn, lno=ln,
+    r = logger.makeRecord(_DOMAIN, lvl, fn=fn, lno=ln,
                           msg=msg, args=(), exc_info=exc_info,
                           func=fn, extra=None, sinfo=None)
     logger.handle(r)
