@@ -47,21 +47,28 @@ def warning (msg, depth=0) : _log(logging.WARNING, msg, depth=depth+1)
 def error (msg, depth=0) :   _log(logging.ERROR, msg, depth=depth+1)
 
 
+# _LOG_LEVEL_INFO:
+#
+_LogLevelInfo = collections.namedtuple('_LogLevelInfo',
+                                       ('err', 'sym'))
+_LOG_LEVEL_INFO = {
+    logging.DEBUG:    _LogLevelInfo(False, '..'),
+    logging.INFO:     _LogLevelInfo(False, '--'),
+    logging.WARNING:  _LogLevelInfo(False, 'WW'),
+    logging.ERROR:    _LogLevelInfo(False, 'EE'),
+    logging.CRITICAL: _LogLevelInfo(False, 'FF'),
+}
+
+
 # LogGlobalFilter:
 #
 class LogGlobalFilter :
 
 
-    SYM = {logging.DEBUG:   '..',
-           logging.INFO :   '--',
-           logging.WARNING: 'WW',
-           logging.ERROR:   'EE'}
-
-    
     # __call__:
     #
     def __call__ (s, r) :
-        setattr(r, 'levelsym', LogGlobalFilter.SYM[r.levelno])
+        setattr(r, 'levelsym', _LOG_LEVEL_INFO[r.levelno].sym)
         return True
 
 
@@ -112,9 +119,10 @@ class LogConsoleHandler (logging.Handler) :
     #
     def emit (self, r) :
         msg = self.format(r)
-        sys.stderr.write(msg)
-        sys.stderr.write('\n')
-        sys.stderr.flush()
+        f = sys.stderr if _LOG_LEVEL_INFO[r.levelno].err else sys.stdout
+        f.write(msg)
+        f.write('\n')
+        f.flush()
 
 
 # format_exception:
