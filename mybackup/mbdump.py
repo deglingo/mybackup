@@ -23,7 +23,8 @@ USAGE: mbdump [OTPIONS] CONFIG [DISK...]
 
 OPTIONS:
 
-  -h, --help  print this message and exit
+  -f, --force  force dump(s)
+  -h, --help   print this message and exit
 """
 
 
@@ -565,6 +566,8 @@ class Config :
     #
     def __init__ (self) :
         self.system = CfgSystem()
+        # runtime
+        self.force = False
 
         
     # init:
@@ -1149,13 +1152,15 @@ class MBDumpApp :
         # parse the command line
         # [fixme] -c should be elsewhere
         _cfgparam = ''
-        shortopts = 'c:h'
-        longopts = ['help']
+        shortopts = 'c:fh'
+        longopts = ['force', 'help']
         opts, args = getopt.gnu_getopt(sys.argv[1:], shortopts, longopts)
         for o, a in opts :
             if o in ('-h', '--help') :
                 sys.stdout.write(USAGE)
                 sys.exit(0)
+            elif o in ('-f', '--force') :
+                self.config.force = True
             elif o in ('-c',) :
                 _cfgparam = a
             else :
@@ -1278,28 +1283,32 @@ class MBDumpApp :
     # __select_disks:
     #
     def __select_disks (self, args) :
-        trace("selecting disks (%d args: %s)" % (len(args), args))
+        trace("selecting disks (%d args: %s force=%s)" %
+              (len(args), args, self.config.force))
         if args :
             disklist = [self.config.disks[d] for d in args]
         else :
             disklist = list(self.config.disks.values())
         sched = []
         for disk in disklist :
-            dump = self.db.select_last_dump(disk)
-            if dump is None :
-                trace("%s: no last dump found, selected" % disk)
+            if self.config.force :
+                trace("%s: force flag set, selected" % disk.name)
             else :
-                hrs = self.db.select_run(dump.runid).hrs
-                # [TODO]
-                if hrs[:8] > self.config.start_hrs[:8] :
-                    error("%s: last dump is in the future!!" % disk.name)
-                    # force run ?
-                    continue
-                elif hrs[:8] < self.config.start_hrs[:8] :
-                    trace("%s: last dump older than 1 day, selected" % disk.name)
+                dump = self.db.select_last_dump(disk)
+                if dump is None :
+                    trace("%s: no last dump found, selected" % disk)
                 else :
-                    trace("%s: already dumped today, skipped" % disk.name)
-                    continue
+                    hrs = self.db.select_run(dump.runid).hrs
+                    # [TODO]
+                    if hrs[:8] > self.config.start_hrs[:8] :
+                        error("%s: last dump is in the future!!" % disk.name)
+                        error("%s: I prefer to skip this dump, use -f to force selection" % disk.name)
+                        continue
+                    elif hrs[:8] < self.config.start_hrs[:8] :
+                        trace("%s: last dump older than 1 day, selected" % disk.name)
+                    else :
+                        trace("%s: up to date, skipped" % disk.name)
+                        continue
             sched.append(DumpSched(disk=disk.name, cfgdisk=disk))
         return sched
 

@@ -97,5 +97,9 @@ test_base_main()
 		test $day -ne 1 || {
 			date=`st_fakedate -d$day -h2`;
 			_MB_SYSTEST_DATE="$date" st_mbdump TEST; }
+		# also try the -f options
+		test $day -ne 1 || {
+			date=`st_fakedate -d$day -h2`;
+			_MB_SYSTEST_DATE="$date" st_mbdump -f TEST; }
 	done
 }
