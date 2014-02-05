@@ -12,6 +12,7 @@ from mybackup.tools import *
 from mybackup import asciitable
 from mybackup.config import Config
 from mybackup.journal import Journal
+from mybackup import mbapp
 
 # debug
 # import mybackup as _debug_mybackup
@@ -226,24 +227,15 @@ class Index :
 
 # MBDumpApp:
 #
-class MBDumpApp :
+class MBDumpApp (mbapp.MBAppBase) :
 
 
-    # main:
+    LOG_DOMAIN = 'mbdump'
+
+
+    # app_run:
     #
-    def main (self) :
-        try:
-            self.__main()
-        except Exception:
-            print_exception()
-            sys.exit(1)
-
-
-    # __main:
-    #
-    def __main (self) :
-        self.__setup_logger()
-        self.config = Config()
+    def app_run (self) :
         # parse the command line
         # [fixme] -c should be elsewhere
         _cfgparam = ''
@@ -257,23 +249,17 @@ class MBDumpApp :
             elif o in ('-f', '--force') :
                 self.config.force = True
             elif o in ('-q', '--quiet') :
-                self.config.verb_level -= 1
+                self.quiet()
             elif o in ('-v', '--verbose') :
-                self.config.verb_level += 1
+                self.verbose()
             elif o in ('-c',) :
                 _cfgparam = a
             else :
                 assert 0, (o, a)
-        # fix log level
-        self.log_cfilter.enable(logging.DEBUG,    self.config.verb_level >= 3)
-        self.log_cfilter.enable(logging.INFO,     self.config.verb_level >= 2)
-        self.log_cfilter.enable(logging.WARNING,  self.config.verb_level >= 1)
-        self.log_cfilter.enable(logging.ERROR,    self.config.verb_level >= 1)
-        self.log_cfilter.enable(logging.CRITICAL, self.config.verb_level >= 0)
         # [REMOVEME]
         if _cfgparam :
             if len(args) >= 1 :
-                self.config.init(args[0])
+                self.init_config(args[0])
             o = self.config
             for n in _cfgparam.split('.') :
                 o = getattr(o, n)
@@ -281,11 +267,9 @@ class MBDumpApp :
             sys.exit(0)
         # init the config
         assert len(args) >= 1, args
-        self.config.init(args.pop(0))
+        self.init_config(args.pop(0))
         # open the logfile and say something
-        self.__open_logfile()
-        trace("started at %s (with pid %d/%d)" %
-              (self.config.start_date, os.getpid(), os.getppid()))
+        self.open_logfile()
         # acquire the config lock
         try:
             with FLock(self.config.cfglockfile, block=False) :
@@ -331,44 +315,6 @@ class MBDumpApp :
         self.journal.roll(self.config.journaldir, self.config.start_hrs)
         # ok
         info("all done, bye!")
-
-
-    # __setup_logger:
-    #
-    def __setup_logger (self) :
-        logger = log_setup('mbdump')
-        # console handler
-        chdlr = LogConsoleHandler()
-        self.log_cfilter = LogLevelFilter()
-        chdlr.addFilter(self.log_cfilter)
-        logger.addHandler(chdlr)
-        # set defaults from env vars
-        self.log_cfilter.enable(logging.DEBUG, bool(os.environ.get('MB_DEBUG')))
-        self.log_cfilter.enable(logging.INFO)
-
-
-    # __open_logfile:
-    #
-    def __open_logfile (self) :
-        logger = logging.getLogger('mbdump')
-        n, sfx = 0, ''
-        while True :
-            logfile = os.path.join(self.config.logdir, 'mbdump.%s.%s%s.log' %
-                                   (self.config.cfgname, self.config.start_hrs, sfx))
-            try:
-                fd = os.open(logfile, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
-            except FileExistsError:
-                n += 1
-                sfx = '.%d' % n
-                continue
-            os.close(fd)
-            break
-        fhdlr = logging.FileHandler(logfile)
-        fhdlr.setLevel(1)
-        ffmt = LogFormatter(fmt='%(asctime)s %(process)5d [%(levelsym)s] %(message)s',
-                            datefmt='%Y/%m/%d %H:%M:%S')
-        fhdlr.setFormatter(ffmt)
-        logger.addHandler(fhdlr)
 
 
     # __select_disks:
@@ -702,5 +648,4 @@ class MBDumpApp :
 
 # exec
 if __name__ == '__main__' :
-    app = MBDumpApp()
-    app.main()
+    MBDumpApp.main()
