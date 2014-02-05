@@ -235,17 +235,15 @@ st_mbdump()
 	echo "${1:-}" | grep '^[!0-9]' >/dev/null \
 		&& { expect="$1"; shift; } || true
 	st_exec "$expect" mbdump "${@}"
-	# local r=0 cmd="\"$ST_MBDUMP\"" expect_fail=0
-	# test x"`echo ${1:-} | cut -b1`" != x"!" || { 
-	# 	expect_fail=1; shift; }
-	# while test $# -gt 0; do cmd="$cmd \"$1\""; shift; done
-	# trace "EXEC: $cmd"
-	# eval "$cmd" || r=$?
-	# test $expect_fail -eq 0 -a $r -eq 0
-	# test '(' $expect_not -eq 0 -a $r -eq $expect_r ')' \
-	# 	-o '(' $expect_not -ne 0 -a $r -ne $expect_r ')' \
-	# 	&& trace " -> $r (OK)" \
-	# 	|| die "mbdump did not return expected status: $r (expected $expect_r)"
+}
+
+# st_mbclean
+st_mbclean()
+{
+	local expect=0
+	echo "${1:-}" | grep '^[!0-9]' >/dev/null \
+		&& { expect="$1"; shift; } || true
+	st_exec "$expect" mbclean "${@}"
 }
 
 

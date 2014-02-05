@@ -38,6 +38,7 @@ m4_define([mb_modules], [ \
   asciitable \
   base \
   mbdump \
+  mbclean \
   mbui \
   mbuidlg \
 ])
@@ -64,6 +65,7 @@ AC_CONFIG_FILES([ \
 ])
 AC_CONFIG_FILES([tools/pycc], [chmod +x tools/pycc])
 AC_CONFIG_FILES([bin/mbdump], [chmod +x bin/mbdump])
+AC_CONFIG_FILES([bin/mbclean], [chmod +x bin/mbclean])
 AC_CONFIG_FILES([bin/mbui], [chmod +x bin/mbui])
 AC_CONFIG_FILES([docs/examples/mirror])
 AC_CONFIG_FILES([systest/mybackup-systest], [chmod +x systest/mybackup-systest])
