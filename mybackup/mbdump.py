@@ -23,8 +23,10 @@ USAGE: mbdump [OTPIONS] CONFIG [DISK...]
 
 OPTIONS:
 
-  -f, --force  force dump(s)
-  -h, --help   print this message and exit
+  -f, --force    force dump(s)
+  -q, --quiet    be less verbose
+  -v, --verbose  be more verbose
+  -h, --help     print this message and exit
 """
 
 
@@ -90,7 +92,7 @@ class LogLevelFilter :
         if enab :
             self.levels.add(lvl)
         else :
-            self.levels.remove(lvl)
+            self.levels.discard(lvl)
             
         
     # __call__:
@@ -574,7 +576,8 @@ class Config :
     #
     def __init__ (self) :
         self.system = CfgSystem()
-        # runtime
+        # [fixme] runtime
+        self.verb_level = 2
         self.force = False
 
         
@@ -1160,7 +1163,7 @@ class MBDumpApp :
         # parse the command line
         # [fixme] -c should be elsewhere
         _cfgparam = ''
-        shortopts = 'c:fh'
+        shortopts = 'c:fhqv'
         longopts = ['force', 'help']
         opts, args = getopt.gnu_getopt(sys.argv[1:], shortopts, longopts)
         for o, a in opts :
@@ -1169,10 +1172,20 @@ class MBDumpApp :
                 sys.exit(0)
             elif o in ('-f', '--force') :
                 self.config.force = True
+            elif o in ('-q', '--quiet') :
+                self.config.verb_level -= 1
+            elif o in ('-v', '--verbose') :
+                self.config.verb_level += 1
             elif o in ('-c',) :
                 _cfgparam = a
             else :
                 assert 0, (o, a)
+        # fix log level
+        self.log_cfilter.enable(logging.DEBUG,    self.config.verb_level >= 3)
+        self.log_cfilter.enable(logging.INFO,     self.config.verb_level >= 2)
+        self.log_cfilter.enable(logging.WARNING,  self.config.verb_level >= 1)
+        self.log_cfilter.enable(logging.ERROR,    self.config.verb_level >= 1)
+        self.log_cfilter.enable(logging.CRITICAL, self.config.verb_level >= 0)
         # [REMOVEME]
         if _cfgparam :
             if len(args) >= 1 :
