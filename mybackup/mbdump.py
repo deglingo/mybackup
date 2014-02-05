@@ -52,13 +52,13 @@ def error (msg, depth=0, **kw) :   _log(logging.ERROR, msg, depth=depth+1, **kw)
 # _LOG_LEVEL_INFO:
 #
 _LogLevelInfo = collections.namedtuple('_LogLevelInfo',
-                                       ('err', 'sym'))
+                                       ('err', 'sym', 'jrnkey'))
 _LOG_LEVEL_INFO = {
-    logging.DEBUG:    _LogLevelInfo(False, '..'),
-    logging.INFO:     _LogLevelInfo(False, '--'),
-    logging.WARNING:  _LogLevelInfo(True, 'WW'),
-    logging.ERROR:    _LogLevelInfo(True, 'EE'),
-    logging.CRITICAL: _LogLevelInfo(True, 'FF'),
+    logging.DEBUG:    _LogLevelInfo(False, '..', ''),
+    logging.INFO:     _LogLevelInfo(False, '--', ''),
+    logging.WARNING:  _LogLevelInfo(True, 'WW',  'WARNING'),
+    logging.ERROR:    _LogLevelInfo(True, 'EE',  'ERROR'),
+    logging.CRITICAL: _LogLevelInfo(True, 'FF',  'ERROR'),
 }
 
 
@@ -81,9 +81,11 @@ class LogLevelFilter :
 
     # __init__:
     #
-    def __init__ (self) :
-        self.levels = set((logging.DEBUG, logging.INFO, logging.WARNING,
-                           logging.ERROR, logging.CRITICAL))
+    def __init__ (self, levels=None) :
+        if levels is None :
+            levels = (logging.DEBUG, logging.INFO, logging.WARNING,
+                      logging.ERROR, logging.CRITICAL)
+        self.levels = set(levels)
 
 
     # enable:
@@ -136,6 +138,34 @@ class LogConsoleHandler (logging.Handler) :
     def handleError (self, rec) :
         sys.stderr.write("** ERROR IN LOG HANDLER : %s **\n" % rec)
         print_exception()
+
+
+# LogJournalHandler:
+#
+class LogJournalHandler (logging.Handler) :
+
+
+    # __init__:
+    #
+    def __init__ (self, journal) :
+        logging.Handler.__init__(self, 1)
+        self.addFilter(LogLevelFilter((logging.WARNING,
+                                       logging.ERROR,
+                                       logging.CRITICAL)))
+        self.journal = weakref.ref(journal, self._notify)
+
+
+    def _notify (self, *args) :
+        assert 0, args
+        
+
+    # emit:
+    #
+    def emit (self, rec) :
+        j = self.journal()
+        if j is None :
+            assert 0
+        j.record_log(rec)
 
 
 # format_exception:
@@ -434,14 +464,21 @@ DumpSched = attrdict('DumpSched', ())
 
 # JournalState:
 #
-JournalState = attrdict (
-    'JournalState', 
+_JournalState = attrdict (
+    '_JournalState', 
     (),
     defo={'hrs': 'X',
           'config': '',
           'state': 'init',
           'dumps': {},
-          'stranges': []})
+          'stranges': [],
+          'warnings': [],
+          'errors': []})
+
+class JournalState (_JournalState) :
+    nstranges = property(lambda s: len(s.stranges))
+    nwarnings = property(lambda s: len(s.warnings))
+    nerrors = property(lambda s: len(s.errors))
 
 
 # DumpInfo:
@@ -836,6 +873,10 @@ class Journal :
 
         'STRANGE': (('source', 's'),
                     ('line', 's')),
+
+        'WARNING': (('message', 's'),),
+
+        'ERROR': (('message', 's'),),
     }
 
 
@@ -844,7 +885,7 @@ class Journal :
     
     # __init__:
     #
-    def __init__ (self, fname, mode, lockfile) :
+    def __init__ (self, fname, mode, lockfile, logger) :
         self.lockfile = lockfile
         self.fname = fname
         self.mode = mode
@@ -855,6 +896,8 @@ class Journal :
             with self.flock :
                 fd = os.open(self.fname, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
                 os.close(fd)
+            # captures all log errors and warnings
+            logger.addHandler(LogJournalHandler(self))
         else :
             assert 0, mode # [todo]
 
@@ -912,6 +955,10 @@ class Journal :
                                        nfiles=kw['nfiles'])
         elif key == 'STRANGE' :
             s.stranges.append((kw['source'], kw['line']))
+        elif key == 'WARNING' :
+            s.warnings.append((kw['message'],))
+        elif key == 'ERROR' :
+            s.errors.append((kw['message'],))
         else :
             assert 0, (key, kw)
         # trace("JOURNAL UPDATE: %s\n%s" %
@@ -971,6 +1018,14 @@ class Journal :
         f.flush()
         f.close()
         os.rename(tmp, self.fname)
+
+
+    # record_log:
+    #
+    def record_log (self, rec) :
+        key = _LOG_LEVEL_INFO[rec.levelno].jrnkey
+        assert key, rec
+        self.record(key, message=rec.message)
 
 
 # DB:
@@ -1381,12 +1436,15 @@ class MBDumpApp :
         self.runid = self.db.record_run(self.config.start_hrs)
         # open the journal
         try:
-            self.journal = Journal(self.config.journalfile, 'w', self.config.journallock)
+            self.journal = Journal(self.config.journalfile, 'w',
+                                   lockfile=self.config.journallock,
+                                   logger=logging.getLogger('mbdump'))
         except FileExistsError:
             error("could not open journal file: '%s'" % self.config.journalfile)
             error("this probably means that an earlier run failed, please run \`mbclean %s'" %
                   (self.config.cfgname))
             sys.exit(1)
+        warning("OUCH")
         self.journal.record('START', config=self.config.cfgname, runid=self.runid, hrs=self.config.start_hrs)
         self.journal.record('SELECT', disks=','.join(s.disk for s in sched))
         # schedule the dumps
