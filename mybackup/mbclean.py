@@ -1,6 +1,6 @@
 #
 
-import sys, getopt, logging
+import sys, getopt, logging, os
 
 from mybackup.log import *
 from mybackup.config import Config
@@ -27,6 +27,16 @@ class MBCleanApp :
     # main:
     #
     def main (self) :
+        try:
+            self.__main()
+        except Exception as exc:
+            error("unhandled exception: %s" % exc,
+                  exc_info=sys.exc_info())
+
+
+    # __main:
+    #
+    def __main (self) :
         self.__log_setup()
         self.config = Config()
         # parse the command line
@@ -52,6 +62,10 @@ class MBCleanApp :
         # init the config
         assert len(args) == 1, args
         self.config.init(args.pop(0))
+        # open the logfile and say something
+        self.__log_openfile()
+        trace("started at %s (with pid %d/%d)" %
+              (self.config.start_date, os.getpid(), os.getppid()))
 
 
     # __log_setup:
@@ -62,6 +76,30 @@ class MBCleanApp :
         hdlr = LogConsoleHandler()
         hdlr.addFilter(self.log_cfilter)
         logger.addHandler(hdlr)
+
+
+    # __log_openfile:
+    #
+    def __log_openfile (self) :
+        logger = logging.getLogger('mbclean')
+        n, sfx = 0, ''
+        while True :
+            logfile = os.path.join(self.config.logdir, 'mbclean.%s.%s%s.log' %
+                                   (self.config.cfgname, self.config.start_hrs, sfx))
+            try:
+                fd = os.open(logfile, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+            except FileExistsError:
+                n += 1
+                sfx = '.%d' % n
+                continue
+            os.close(fd)
+            break
+        fhdlr = logging.FileHandler(logfile)
+        fhdlr.setLevel(1)
+        ffmt = LogFormatter(fmt='%(asctime)s %(process)5d [%(levelsym)s] %(message)s',
+                            datefmt='%Y/%m/%d %H:%M:%S')
+        fhdlr.setFormatter(ffmt)
+        logger.addHandler(fhdlr)
 
 
 # exec
