@@ -1,6 +1,6 @@
 #
 
-import sys, getopt, logging, os
+import sys, getopt, logging, os, pprint
 
 from mybackup.base import *
 from mybackup.log import *
@@ -85,6 +85,9 @@ class MBCleanApp :
         self.journal = Journal(self.config.journalfile, 'r',
                                lockfile=self.config.journallock,
                                logger=logging.getLogger('mbclean'))
+        jinfo = self.journal.summary()
+        trace("got summary:\n%s" % pprint.pformat(jinfo))
+        info("journal found, cleaning up...")
 
 
     # __log_setup:

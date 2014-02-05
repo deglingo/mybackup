@@ -7,12 +7,16 @@ __all__ = [
     'warning',
     'error',
     'critical',
+    'exception',
     'LogLevelFilter',
     'LogFormatter',
+    'LogBaseHandler',
     'LogConsoleHandler',
 ]
 
 import sys, os, threading, logging, collections, traceback
+
+from mybackup.base import *
 
 
 # just in case, log_setup is thread-locked
@@ -54,6 +58,7 @@ def info  (msg, depth=0, **kw) :   _log(logging.INFO,  msg, depth=depth+1, **kw)
 def warning (msg, depth=0, **kw) : _log(logging.WARNING, msg, depth=depth+1, **kw)
 def error (msg, depth=0, **kw) :   _log(logging.ERROR, msg, depth=depth+1, **kw)
 def critical (msg, depth=0, **kw) :   _log(logging.CRITICAL, msg, depth=depth+1, **kw)
+def exception (msg, depth=0, **kw) : critical(msg, depth=depth+1, exc_info=sys.exc_info(), **kw)
 
 
 # _LOG_LEVEL_INFO:
@@ -115,25 +120,37 @@ class LogLevelFilter :
 class LogFormatter (logging.Formatter) :
 
 
-    # format_exception:
+    # formatException:
     #
-    def format_exception (self, exc_info) :
-        assert 0, exc_info
-        return '\n'.join(format_exception(exc_info))
+    def formatException (self, exc_info) :
+        return ''.join(format_exception(exc_info))
+
+
+# LogBaseHandler:
+#
+# Base for all handlers we define in the app.
+#
+class LogBaseHandler (logging.Handler) :
+    
+
+    raiseExceptions = True
+
+
+    # handleError:
+    #
+    def handleError (self, *args) :
+        assert 0, args
 
 
 # LogConsoleHandler:
 #
-class LogConsoleHandler (logging.Handler) :
-
-
-    raiseExceptions = True
+class LogConsoleHandler (LogBaseHandler) :
 
 
     # __init__:
     #
     def __init__ (self) :
-        logging.Handler.__init__(self, 1)
+        LogBaseHandler.__init__(self)
         if os.environ.get('MB_LOG_LOCS', '') :
             cfmt = '%(name)s:%(filename)s:%(lineno)d:%(funcName)s:%(levelname)s: %(message)s'
         else :

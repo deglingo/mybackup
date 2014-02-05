@@ -49,7 +49,7 @@ class DumpInfo (_DumpInfo) :
 
 # LogJournalHandler:
 #
-class LogJournalHandler (logging.Handler) :
+class LogJournalHandler (LogBaseHandler) :
 
 
     KEYMAP = {
@@ -62,7 +62,7 @@ class LogJournalHandler (logging.Handler) :
     # __init__:
     #
     def __init__ (self, journal) :
-        logging.Handler.__init__(self, 1)
+        LogBaseHandler.__init__(self, 1)
         self.addFilter(LogLevelFilter((logging.WARNING,
                                        logging.ERROR,
                                        logging.CRITICAL)))
@@ -89,36 +89,131 @@ class Journal :
 
 
     KEYSPECS = {
-        'START':  (('config', 's'),
-                   ('runid',  'i+'),
-                   ('hrs',    'h')),
+        'START':  (('config', 'str'),
+                   ('runid',  'uint'),
+                   ('hrs',    'hrs')),
                    
-        'SELECT': (('disks', 's'),),
+        'SELECT': (('disks', 'str'),),
 
-        'SCHEDULE': (('disk',    's'),
-                     ('prevrun', 'i')),
+        'SCHEDULE': (('disk',    'str'),
+                     ('prevrun', 'int')),
 
-        'DUMP-START':    (('disk',  's'),
-                          ('fname', 's')),
+        'DUMP-START':    (('disk',  'str'),
+                          ('fname', 'str')),
         
-        'DUMP-FINISHED': (('disk',  's'),
-                          ('state', 's'),
-                          ('raw_size', 'i'),
-                          ('comp_size', 'i'),
-                          ('nfiles',    'i')),
+        'DUMP-FINISHED': (('disk',  'str'),
+                          ('state', 'str'),
+                          ('raw_size', 'int'),
+                          ('comp_size', 'int'),
+                          ('nfiles',    'int')),
 
-        'STRANGE': (('source', 's'),
-                    ('line', 's')),
+        'STRANGE': (('source', 'str'),
+                    ('line', 'str')),
 
-        'WARNING': (('message', 's'),),
+        'WARNING': (('message', 'str'),),
 
-        'ERROR': (('message', 's'),),
+        'ERROR': (('message', 'str'),),
     }
 
 
     flock = property(lambda s: FLock(s.lockfile))
 
+
+    # adapt:
+    #
+    # Adapt a string value to the type 't'.
+    #
+    @staticmethod
+    def adapt (t, v) :
+        assert isinstance(v, str), v
+        u = Journal.__unescape(v)
+        n = '_Journal__adapt_' + t
+        h = getattr(Journal, n)
+        return h(u)
+
+
+    # convert:
+    #
+    # Convert a type 't' instance to a string
+    #
+    @staticmethod
+    def convert (t, v) :
+        n = '_Journal__convert_' + t
+        h = getattr(Journal, n)
+        r = h(v)
+        assert isinstance(r, str), v
+        return Journal.__escape(r)
+
+
+    # converters:
+    #
+    @staticmethod
+    def __adapt_str (v) :
+        return v
     
+    @staticmethod
+    def __convert_str (v) :
+        assert isinstance(v, str), v
+        return v
+
+    @staticmethod
+    def __adapt_int (v) :
+        return int(v)
+
+    @staticmethod
+    def __convert_int (v) :
+        assert isinstance(v, int), v
+        return str(v)
+
+    @staticmethod
+    def __adapt_uint (v) :
+        r = int(v)
+        assert r > 0, v
+        return r
+
+    @staticmethod
+    def __convert_uint (v) :
+        assert isinstance(v, int), v
+        assert v > 0, v
+        return str(v)
+
+    @staticmethod
+    def __adapt_hrs (v) :
+        return check_hrs(v)
+
+    @staticmethod
+    def __convert_hrs (v) :
+        return check_hrs(v)
+
+
+    # (un)escaping:
+    #
+    @staticmethod
+    def __escape (line) :
+        chars = "\\:\n"
+        out = ''
+        for c in line :
+            if c in chars :
+                out += "\\x%02x" % ord(c)
+            else :
+                out += c
+        return out
+
+    @staticmethod
+    def __unescape (line) :
+        out, pos = '', 0
+        while True :
+            i = line.find("\\", pos)
+            if i < 0 :
+                out += line[pos:]
+                return out
+            out += line[pos:i]
+            assert line[i+1] == 'x'
+            char = int(line[i+2:i+4], 16)
+            out += chr(char)
+            pos = i + 1
+    
+
     # __init__:
     #
     def __init__ (self, fname, mode, lockfile, logger) :
@@ -135,7 +230,37 @@ class Journal :
             # captures all log errors and warnings
             logger.addHandler(LogJournalHandler(self))
         else :
-            error("[TODO] read journal")
+            with self.flock :
+                with open(self.fname, 'rt') as f :
+                    lines = list(f.readlines()) 
+            self.__read(lines, self.fname)
+
+
+    # __read:
+    #
+    def __read (self, lines, fname) :
+        trace("parsing journal lines")
+        for lno, l in enumerate(lines) :
+            l = l.strip()
+            if not l : continue
+            try:
+                self.__read_line(l)
+            except Exception:
+                exception("%s:%d: invalid journal line: '%s'" %
+                          (fname, lno+1, l))
+                continue
+
+    def __read_line (self, line) :
+        trace("<< `%s'" % line)
+        argv = line.split(':')
+        trace(">> %s" % ', '.join("`%s'" % w for w in argv))
+        key = argv.pop(0)
+        kspecs = Journal.KEYSPECS[key]
+        assert len(argv) == len(kspecs), (key, argv)
+        kwargs = {}
+        for i, (pname, ptype) in enumerate(kspecs) :
+            kwargs[pname] = self.adapt(ptype, argv[i])
+        self._update(key, kwargs)
 
 
     # summary:
@@ -201,19 +326,6 @@ class Journal :
         #       (key, pprint.pformat(s.asdict())))
 
 
-    # escape:
-    #
-    def escape (self, line) :
-        chars = "\\:\n"
-        out = ''
-        for c in line :
-            if c in chars :
-                out += "\\x%02x" % ord(c)
-            else :
-                out += c
-        return out
-
-
     # record:
     #
     def record (self, key, **kwargs) :
@@ -225,20 +337,7 @@ class Journal :
         assert len(kwargs) == len(keyspec), kwargs
         line = [key]
         for pname, ptype in keyspec :
-            pval = kwargs[pname]
-            if ptype == 's' :
-                assert isinstance(pval, str), (key, pname, pval)
-                pval = self.escape(pval)
-            elif ptype == 'h' :
-                assert check_hrs(pval)
-            elif ptype == 'i' :
-                assert isinstance(pval, int)
-                pval = str(pval)
-            elif ptype == 'i+' :
-                assert isinstance(pval, int) and pval > 0, pval
-                pval = str(pval)
-            else :
-                assert 0, ptype
+            pval = Journal.convert(ptype, kwargs[pname])
             line.append(pval)
         # update state
         self._update(key, kwargs)
