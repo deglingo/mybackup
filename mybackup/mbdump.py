@@ -7,6 +7,7 @@ from subprocess import PIPE as CMDPIPE
 from functools import partial
 
 from mybackup.base import *
+from mybackup.log import *
 from mybackup import asciitable
 
 # debug
@@ -30,121 +31,18 @@ OPTIONS:
 """
 
 
-# trace:
-#
-_log_locations = bool(os.environ.get('MB_LOG_LOCATIONS', ''))
-
-def _log (lvl, msg, depth=0, exc_info=None) :
-    logger = logging.getLogger('mbdump')
-    fn, ln, fc, co = traceback.extract_stack()[-(depth+2)]
-    fn = os.path.realpath(fn)
-    r = logger.makeRecord('mbdump', lvl, fn=fn, lno=ln,
-                          msg=msg, args=(), exc_info=exc_info,
-                          func=fn, extra=None, sinfo=None)
-    logger.handle(r)
-        
-def trace (msg, depth=0, **kw) :   _log(logging.DEBUG, msg, depth=depth+1, **kw)
-def info  (msg, depth=0, **kw) :   _log(logging.INFO,  msg, depth=depth+1, **kw)
-def warning (msg, depth=0, **kw) : _log(logging.WARNING, msg, depth=depth+1, **kw)
-def error (msg, depth=0, **kw) :   _log(logging.ERROR, msg, depth=depth+1, **kw)
-
-
-# _LOG_LEVEL_INFO:
-#
-_LogLevelInfo = collections.namedtuple('_LogLevelInfo',
-                                       ('err', 'sym', 'jrnkey'))
-_LOG_LEVEL_INFO = {
-    logging.DEBUG:    _LogLevelInfo(False, '..', ''),
-    logging.INFO:     _LogLevelInfo(False, '--', ''),
-    logging.WARNING:  _LogLevelInfo(True, 'WW',  'WARNING'),
-    logging.ERROR:    _LogLevelInfo(True, 'EE',  'ERROR'),
-    logging.CRITICAL: _LogLevelInfo(True, 'FF',  'ERROR'),
-}
-
-
-# LogGlobalFilter:
-#
-class LogGlobalFilter :
-
-
-    # __call__:
-    #
-    def __call__ (s, r) :
-        setattr(r, 'levelsym', _LOG_LEVEL_INFO[r.levelno].sym)
-        return True
-
-
-# LogLevelFilter:
-#
-class LogLevelFilter :
-
-
-    # __init__:
-    #
-    def __init__ (self, levels=None) :
-        if levels is None :
-            levels = (logging.DEBUG, logging.INFO, logging.WARNING,
-                      logging.ERROR, logging.CRITICAL)
-        self.levels = set(levels)
-
-
-    # enable:
-    #
-    def enable (self, lvl, enab=True) :
-        if enab :
-            self.levels.add(lvl)
-        else :
-            self.levels.discard(lvl)
-            
-        
-    # __call__:
-    #
-    def __call__ (self, rec) :
-        return rec.levelno in self.levels
-
-
-# LogFormatter:
-#
-class LogFormatter (logging.Formatter) :
-
-
-    # format_exception:
-    #
-    def format_exception (self, exc_info) :
-        assert 0, exc_info
-        return '\n'.join(format_exception(exc_info))
-
-
-# LogConsoleHandler:
-#
-class LogConsoleHandler (logging.Handler) :
-
-
-    raiseExceptions = True
-
-
-    # emit:
-    #
-    def emit (self, r) :
-        msg = self.format(r)
-        f = sys.stderr if _LOG_LEVEL_INFO[r.levelno].err else sys.stdout
-        f.write(msg)
-        f.write('\n')
-        f.flush()
-
-
-    # handleError:
-    #
-    def handleError (self, rec) :
-        sys.stderr.write("** ERROR IN LOG HANDLER : %s **\n" % rec)
-        print_exception()
-
-
 # LogJournalHandler:
 #
 class LogJournalHandler (logging.Handler) :
 
 
+    KEYMAP = {
+        logging.WARNING: 'WARNING',
+        logging.ERROR: 'ERROR',
+        logging.CRITICAL: 'ERROR',
+    }
+
+    
     # __init__:
     #
     def __init__ (self, journal) :
@@ -165,7 +63,8 @@ class LogJournalHandler (logging.Handler) :
         j = self.journal()
         if j is None :
             assert 0
-        j.record_log(rec)
+        key = LogJournalHandler.KEYMAP[rec.levelno]
+        j.record(key, message=rec.message)
 
 
 # format_exception:
@@ -1020,14 +919,6 @@ class Journal :
         os.rename(tmp, self.fname)
 
 
-    # record_log:
-    #
-    def record_log (self, rec) :
-        key = _LOG_LEVEL_INFO[rec.levelno].jrnkey
-        assert key, rec
-        self.record(key, message=rec.message)
-
-
 # DB:
 #
 class DB :
@@ -1354,9 +1245,7 @@ class MBDumpApp :
     # __setup_logger:
     #
     def __setup_logger (self) :
-        logger = logging.getLogger('mbdump')
-        logger.setLevel(1)
-        logger.addFilter(LogGlobalFilter())
+        logger = log_setup('mbdump')
         # console handler
         chdlr = LogConsoleHandler(1)
         self.log_cfilter = LogLevelFilter()
