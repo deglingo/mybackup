@@ -38,6 +38,8 @@ m4_define([mb_modules], [ \
   asciitable \
   base \
   log \
+  tools \
+  config \
   mbdump \
   mbclean \
   mbui \

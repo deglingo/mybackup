@@ -1,6 +1,7 @@
 #
 
 from mybackup.log import *
+from mybackup.config import Config
 
 
 # MBCleanApp:
@@ -12,6 +13,8 @@ class MBCleanApp :
     #
     def main (self) :
         self.__log_setup()
+        self.config = Config()
+        # parse the command line
 
 
     # __log_setup:
