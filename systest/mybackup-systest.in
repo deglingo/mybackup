@@ -171,9 +171,9 @@ run_module()
 {
 	local mod="$1" log="$1.log" r=0
 	st_sync "$ST_SAVEDIR" "$ST_ROOTDIR"
-	( _run_module "$mod"; ) >"$log" 2>&1 || return $?
+	( _run_module "$mod"; ) >"$log" 2>&1 || r=$?
 	st_sync "$ST_ROOTDIR" "$ST_ROOTDIR.$mod"
-	return 0
+	return $r
 }
 
 _run_module()
@@ -216,9 +216,9 @@ st_exec()
 		&& { inv=1; exp=`echo "$expect" | cut -b2-`; } \
 		|| { exp="$inv"; inv=0; }
 	: ${exp:=0}
-	trace "r='$r' inv='$inv' exp='$exp'"
+	#trace "r='$r' inv='$inv' exp='$exp'"
 	if test '(' $inv -eq 0 -a $r -eq $exp ')' -o '(' $inv -ne 0 -a $r -ne $exp ')'; then
-		trace "OK ($r ~= $exp)"
+		trace "OK: '$r' ~= '$expect' [$cmd]"
 		return 0
 	else
 		error "unexpected command result: '$r' != '$expect'"
@@ -328,23 +328,24 @@ st_rand()
 	dd if=/dev/urandom bs=1M count=${1:-1} 2>/dev/null
 }
 
-# st_fakedate [-d DAYS] [-h HOURS] [-r REF=YYYY/MM/DD HH:MM:SS]
+# st_fakedate [-d DAYS] [-h HOURS] [-m MINS] [-r REF=YYYY/MM/DD HH:MM:SS]
 st_fakedate()
 {
-	local days=0 hours=0 ref='1979/12/31 00:00:00'
-	local opts=`getopt -o 'd:h:r:' -- "${@}"`
+	local days=0 hours=0 mins=0 ref='1979/12/31 00:00:00'
+	local opts=`getopt -o 'd:h:m:r:' -- "${@}"`
 	eval set -- "$opts"
 	while true; do
 		case "$1" in
 			-d) days="$2"; shift 2;;
 			-h) hours="$2"; shift 2;;
+			-m) mins="$2"; shift 2;;
 			-r) ref="$2"; shift 2;;
 			--) break;;
 			*) die "? $1";;
 		esac
 	done
 	local stamp=`date -d "$ref" '+%s'` || die "invalid ref date: '$ref'"
-	stamp=`expr $stamp + $days '*' 86400 + $hours '*' 3600`
+	stamp=`expr $stamp + $days '*' 86400 + $hours '*' 3600 + $mins '*' 60`
 	date -d "@$stamp" "+%Y/%m/%d %H:%M:%S"
 }
 

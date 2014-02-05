@@ -34,19 +34,19 @@ OPTIONS:
 #
 _log_locations = bool(os.environ.get('MB_LOG_LOCATIONS', ''))
 
-def _log (lvl, msg, depth=0) :
+def _log (lvl, msg, depth=0, exc_info=None) :
     logger = logging.getLogger('mbdump')
     fn, ln, fc, co = traceback.extract_stack()[-(depth+2)]
     fn = os.path.realpath(fn)
     r = logger.makeRecord('mbdump', lvl, fn=fn, lno=ln,
-                          msg=msg, args=(), exc_info=None,
+                          msg=msg, args=(), exc_info=exc_info,
                           func=fn, extra=None, sinfo=None)
     logger.handle(r)
         
-def trace (msg, depth=0) :   _log(logging.DEBUG, msg, depth=depth+1)
-def info  (msg, depth=0) :   _log(logging.INFO,  msg, depth=depth+1)
-def warning (msg, depth=0) : _log(logging.WARNING, msg, depth=depth+1)
-def error (msg, depth=0) :   _log(logging.ERROR, msg, depth=depth+1)
+def trace (msg, depth=0, **kw) :   _log(logging.DEBUG, msg, depth=depth+1, **kw)
+def info  (msg, depth=0, **kw) :   _log(logging.INFO,  msg, depth=depth+1, **kw)
+def warning (msg, depth=0, **kw) : _log(logging.WARNING, msg, depth=depth+1, **kw)
+def error (msg, depth=0, **kw) :   _log(logging.ERROR, msg, depth=depth+1, **kw)
 
 
 # _LOG_LEVEL_INFO:
@@ -109,12 +109,16 @@ class LogFormatter (logging.Formatter) :
     # format_exception:
     #
     def format_exception (self, exc_info) :
+        assert 0, exc_info
         return '\n'.join(format_exception(exc_info))
 
 
 # LogConsoleHandler:
 #
 class LogConsoleHandler (logging.Handler) :
+
+
+    raiseExceptions = True
 
 
     # emit:
@@ -125,6 +129,13 @@ class LogConsoleHandler (logging.Handler) :
         f.write(msg)
         f.write('\n')
         f.flush()
+
+
+    # handleError:
+    #
+    def handleError (self, rec) :
+        sys.stderr.write("** ERROR IN LOG HANDLER : %s **\n" % rec)
+        print_exception()
 
 
 # format_exception:
@@ -599,6 +610,7 @@ class Config :
         self.dbfile = os.path.join(self.dbdir, self.cfgname + '.db') 
         self.journaldir = os.path.join(self.cfgvardir, 'journal')
         self.journalfile = os.path.join(self.journaldir, 'journal.txt')
+        self.journallock = os.path.join(self.lockdir, '%s.journal.lock' % self.cfgname)
         self.dumpdir = os.path.join(self.cfgvardir, 'dumps')
         self.partdir = os.path.join(self.dumpdir, 'partial')
         self.logdir = os.path.join(self.cfgvardir, 'log')
@@ -743,7 +755,7 @@ class CfgDisk :
             pout.join()
             perr.join()
             r = proc.wait()
-            assert r == 0, (r, self, hook)
+            assert r == 0, (self.config.start_hrs, r, self, hook)
 
 
 # CfgScript:
@@ -826,17 +838,23 @@ class Journal :
                     ('line', 's')),
     }
 
+
+    flock = property(lambda s: FLock(s.lockfile))
+
     
     # __init__:
     #
-    def __init__ (self, fname, mode) :
-        self.lock = threading.Lock()
+    def __init__ (self, fname, mode, lockfile) :
+        self.lockfile = lockfile
         self.fname = fname
         self.mode = mode
         self.state = JournalState()
         if mode == 'w' :
             # [FIXME] !!
-            open(self.fname, 'wt').close()
+            trace("opening journal '%s' for writing" % self.fname)
+            with self.flock :
+                fd = os.open(self.fname, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+                os.close(fd)
         else :
             assert 0, mode # [todo]
 
@@ -845,6 +863,28 @@ class Journal :
     #
     def summary (self) :
         return copy.deepcopy(self.state)
+
+
+    # roll:
+    #
+    # [FIXME] we should have a 'closed' flag to make sure we don't
+    # read/write after a roll!
+    #
+    def roll (self, dirname, hrs) :
+        n, sfx = 0, ''
+        base, ext = os.path.splitext(os.path.basename(self.fname))
+        while True :
+            dest = os.path.join(dirname, base + sfx + ext)
+            try:
+                fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+            except FileExistsError:
+                n += 1
+                sfx = '.%d' % n
+                continue
+            os.close(fd)
+            trace("rolling journal file: '%s'" % dest)
+            os.rename(self.fname, dest)
+            return
 
 
     # _update:
@@ -894,7 +934,7 @@ class Journal :
     # record:
     #
     def record (self, key, **kwargs) :
-        with self.lock :
+        with self.flock :
             self.__record(key, **kwargs)
 
     def __record (self, key, **kwargs) :
@@ -924,8 +964,8 @@ class Journal :
         trace("JOURNAL:%s: %s" % (key, ', '.join("'%s'" % w for w in line[1:])))
         tmp = self.fname + '.tmp'
         f = open(tmp, 'wt')
-        if os.path.exists(self.fname) :
-            f.write(open(self.fname, 'rt').read())
+        # file must exist!
+        f.write(open(self.fname, 'rt').read())
         f.write(':'.join(line))
         f.write('\n')
         f.flush()
@@ -1214,7 +1254,7 @@ class MBDumpApp :
             with FLock(self.config.cfglockfile, block=False) :
                 self.__main_L(args)
         except FLockError as exc:
-            error(exc)
+            error(exc, exc_info=sys.exc_info())
             error("(this probably means that another mbdump process is running)")
             sys.exit(1)
 
@@ -1250,8 +1290,8 @@ class MBDumpApp :
             proc.stdin.close()
             r = proc.wait()
             assert r == 0, r
-        # [TODO] roll the journal
-        pass
+        # [FIXME] roll the journal
+        self.journal.roll(self.config.journaldir, self.config.start_hrs)
         # ok
         info("all done, bye!")
 
@@ -1340,7 +1380,13 @@ class MBDumpApp :
         # record the run now so we get a runid
         self.runid = self.db.record_run(self.config.start_hrs)
         # open the journal
-        self.journal = Journal(self.config.journalfile, 'w')
+        try:
+            self.journal = Journal(self.config.journalfile, 'w', self.config.journallock)
+        except FileExistsError:
+            error("could not open journal file: '%s'" % self.config.journalfile)
+            error("this probably means that an earlier run failed, please run \`mbclean %s'" %
+                  (self.config.cfgname))
+            sys.exit(1)
         self.journal.record('START', config=self.config.cfgname, runid=self.runid, hrs=self.config.start_hrs)
         self.journal.record('SELECT', disks=','.join(s.disk for s in sched))
         # schedule the dumps

@@ -45,21 +45,22 @@ EOF
 
 	st_mkfile -m755 "/etc/mybackup/CRASH/killer" - <<EOF
 #!/bin/sh
+trace() { echo "KILLER: \$*"; }
 LOGFILE="$ST_ROOTDIR/tmp/killer.log"
-trace() { echo "KILLER: \$*" >>"\$LOGFILE"; }
+exec >>"\$LOGFILE" 2>&1
+#set -x
 trace "======================================================================"
 trace "TRIGGER='\${1}' TARGET='\$MB_TEST_CRASH_TRIGGER'"
 test x"\$1" = x"\$MB_TEST_CRASH_TRIGGER" \
   || { trace "WRONG TRIGGER, BYE"; exit 0; }
-KPID=\`pidof -x mbdump\`
-pstree -cps \$\$ >>"\$LOGFILE"
+KPID=\`ps -p\$\$ -oppid --no-headers\`
+pstree -alps \$KPID
 trace "KILLING PID \$KPID"
-#sync; sync; sync; # makes sure all logs are gone ?
-kill -TERM \$KPID || {
-  trace "KILL FAILED! (\$?)" >&2;
+kill -KILL \$KPID || {
+  trace "KILL FAILED! (\$?)";
   exit 1; }
-sleep 1 # let it die
-trace "HEY, WHAT AM I DOING HERE?"
+sleep 5 # let it die
+trace "** HEY, WHAT AM I DOING HERE? **"
 exit 1
 EOF
 }
@@ -77,12 +78,25 @@ getpid()
 #
 test_crash_main()
 {
+	local day=1 hour date
 	st_sync "$ST_RUNDIR/fs/day1" "$ST_ROOTDIR/fs"
 	# this one should work
-	st_mbdump CRASH
-	# and it must fail
-	MB_TEST_CRASH_TRIGGER='schedule' st_mbdump '!' -f CRASH
-	# 
+	hour=1; date="`st_fakedate -d$day -h$hour`"
+	trace "** RUN $hour : $date **"
+	_MB_SYSTEST_DATE="$date" \
+		st_mbdump CRASH -q || die
+	# this must fail
+	hour=2; date="`st_fakedate -d$day -h$hour`"
+	trace "** RUN $hour : $date **"
+	_MB_SYSTEST_DATE="$date" \
+		MB_TEST_CRASH_TRIGGER='schedule' \
+		st_mbdump '!' -f CRASH -q || die
+	# now make sure it won't run again (because the journal is still
+	# present)
+	hour=3; date="`st_fakedate -d$day -h$hour`"
+	trace "** RUN $hour : $date **"
+	_MB_SYSTEST_DATE="$date" \
+		st_mbdump '!' -f CRASH -q || die
 	
 	trace "OK"
 }
