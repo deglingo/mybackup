@@ -78,7 +78,11 @@ getpid()
 test_crash_main()
 {
 	st_sync "$ST_RUNDIR/fs/day1" "$ST_ROOTDIR/fs"
-	local r=0
-	MB_TEST_CRASH_TRIGGER='schedule' "$ST_MBDUMP" CRASH || r=$?
-	trace "mbdump status: $r"
+	# this one should work
+	st_mbdump CRASH
+	# and it must fail
+	MB_TEST_CRASH_TRIGGER='schedule' st_mbdump '!' -f CRASH
+	# 
+	
+	trace "OK"
 }

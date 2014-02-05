@@ -198,18 +198,54 @@ _run_module()
 }
 
 
+# st_exec [EXPECTED-STATUS] COMMAND...
+st_exec()
+{
+	local expect=0
+	echo "${1:-}" | grep '^[!0-9]' >/dev/null \
+		&& { expect="$1"; shift; } || true
+	# build the command
+	test $# -gt 0 || die "st_exec: command missing"
+	cmd="\"$1\""; shift
+	while test $# -gt 0; do cmd="$cmd \"$1\""; shift; done
+	trace "> $cmd"
+	local r=0; eval "$cmd" || r=$?
+	# check the status
+	local inv=`echo "$expect" | cut -b1` exp
+	test x"$inv" = x"!" \
+		&& { inv=1; exp=`echo "$expect" | cut -b2-`; } \
+		|| { exp="$inv"; inv=0; }
+	: ${exp:=0}
+	trace "r='$r' inv='$inv' exp='$exp'"
+	if test '(' $inv -eq 0 -a $r -eq $exp ')' -o '(' $inv -ne 0 -a $r -ne $exp ')'; then
+		trace "OK ($r ~= $exp)"
+		return 0
+	else
+		error "unexpected command result: '$r' != '$expect'"
+		error "command was: $cmd"
+		die # ?
+		return 1
+	fi
+}
+
 # st_mbdump
 st_mbdump()
 {
-	local r=0 cmd="\"$ST_MBDUMP\""
-	while test $# -gt 0; do cmd="$cmd \"$1\""; shift; done
-	trace "EXEC: $cmd"
-	if eval "$cmd"; then
-		trace " -> OK"
-	else
-		trace "ERROR: command failed!"
-	fi
-	return $r
+	local expect=0
+	echo "${1:-}" | grep '^[!0-9]' >/dev/null \
+		&& { expect="$1"; shift; } || true
+	st_exec "$expect" mbdump "${@}"
+	# local r=0 cmd="\"$ST_MBDUMP\"" expect_fail=0
+	# test x"`echo ${1:-} | cut -b1`" != x"!" || { 
+	# 	expect_fail=1; shift; }
+	# while test $# -gt 0; do cmd="$cmd \"$1\""; shift; done
+	# trace "EXEC: $cmd"
+	# eval "$cmd" || r=$?
+	# test $expect_fail -eq 0 -a $r -eq 0
+	# test '(' $expect_not -eq 0 -a $r -eq $expect_r ')' \
+	# 	-o '(' $expect_not -ne 0 -a $r -ne $expect_r ')' \
+	# 	&& trace " -> $r (OK)" \
+	# 	|| die "mbdump did not return expected status: $r (expected $expect_r)"
 }
 
 
