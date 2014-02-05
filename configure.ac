@@ -55,12 +55,14 @@ AC_SUBST([MB_SYSTEST_MODULES], "m4_map_args_w(mb_systest_modules, [], [], [ ])")
 
 AC_CONFIG_FILES([ \
 	Makefile \
+	tools/Makefile \
 	bin/Makefile \
 	mybackup/Makefile \
 	docs/Makefile \
 	docs/examples/Makefile \
 	systest/Makefile \
 ])
+AC_CONFIG_FILES([tools/pycc], [chmod +x tools/pycc])
 AC_CONFIG_FILES([bin/mbdump], [chmod +x bin/mbdump])
 AC_CONFIG_FILES([bin/mbui], [chmod +x bin/mbui])
 AC_CONFIG_FILES([docs/examples/mirror])

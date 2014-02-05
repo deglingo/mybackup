@@ -1,11 +1,19 @@
 #
 
+PYCC = $(top_builddir)/tools/pycc
+
 all-local: mb-modules.stamp-h sysconf.py
 
-mb-modules.stamp-h: $(MB_MODULES_PY)
-	for mod in $(MB_MODULES_PY); do \
-		test -e "$$mod" || $(LN_S) "$(abs_top_srcdir)/mybackup/$$mod" "$$mod"; \
-	done
+mb-modules.stamp-h: $(MB_MODULES_PY) $(PYCC)
+	err=0; \
+	for mod in $(MB_MODULES); do \
+		test -e "$$mod.py" || $(LN_S) "$(abs_top_srcdir)/mybackup/$$mod.py" "$$mod.py"; \
+		test "$$mod.pyc" -nt "$$mod.py" -a "$$mod.pyc" -nt "$(PYCC)" \
+			|| $(PYCC) "$$mod.py" || err=`expr $$err + 1`; \
+	done; \
+	test $$err -eq 0 || { \
+		echo "ERROR: some module(s) compilation failed!" >&2; \
+		exit 1; }
 	echo >$@
 
 sysconf.py: sysconf.py.in sysconf.sed

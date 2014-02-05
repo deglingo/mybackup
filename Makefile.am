@@ -1,7 +1,7 @@
 #
 
-# note: docs must be before systest!
-SUBDIRS = bin mybackup docs systest
+# note: tools must be first and docs must be before systest!
+SUBDIRS = tools bin mybackup docs systest
 
 .PHONY: listvars
 

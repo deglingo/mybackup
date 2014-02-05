@@ -1,0 +1,23 @@
+#!@PYTHON@
+# -*- python-mode -*-
+
+import sys, os, py_compile, re
+RE_ERRLOC = re.compile(r"\([^,]*[,]\s*line\s+(?P<L>[0-9]+)\s*\)")
+# pyver = '%d%d' % sys.version_info[:2] # [fixme]
+src = sys.argv[1]
+dsrc = os.path.realpath(src)
+base = os.path.splitext(os.path.basename(src))[0]
+# dest = os.path.join('__pycache__', '%s.cpython-%s.pyc' % (base, pyver))
+dest = base + '.pyc'
+print("pycc: '%s' -> '%s' (%s)" % (src, dest, dsrc))
+# if not os.path.isdir('__pycache__') :
+#     os.mkdir('__pycache__')
+try:
+    r = py_compile.compile(src, dest, dsrc, doraise=True)
+except Exception as exc:
+    m = RE_ERRLOC.search(str(exc.exc_value))
+    if m is None : lno = '?' # ?
+    else : lno = m.group('L')
+    sys.stderr.write('pycc:%s:%s: %s: %s\n' %
+                     (dsrc, lno, exc.exc_type_name, exc.exc_value))
+    sys.exit(1)
