@@ -41,6 +41,7 @@ m4_define([mb_modules], [ \
   tools \
   config \
   journal \
+  mbapp \
   mbdump \
   mbclean \
   mbui \
