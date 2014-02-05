@@ -1,5 +1,7 @@
 #
 
+from mybackup.log import *
+
 
 # MBCleanApp:
 #
@@ -9,7 +11,8 @@ class MBCleanApp :
     # main:
     #
     def main (self) :
-        pass
+        logger = log_setup('mbclean')
+        trace("HELLO!")
 
 
 # exec

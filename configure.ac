@@ -37,6 +37,7 @@ m4_define([mb_modules], [ \
   __init__ \
   asciitable \
   base \
+  log \
   mbdump \
   mbclean \
   mbui \
