@@ -10,6 +10,13 @@ from mybackup.base import *
 from mybackup.log import *
 
 
+# Errors:
+#
+class JournalNotFoundError (Exception) :
+    def __init__ (self, fname) :
+        Exception.__init__(self, "journal file not found: '%s'" % fname)
+
+        
 # JournalState:
 #
 _JournalState = attrdict (
@@ -231,8 +238,11 @@ class Journal :
             logger.addHandler(LogJournalHandler(self))
         else :
             with self.flock :
-                with open(self.fname, 'rt') as f :
-                    lines = list(f.readlines()) 
+                try:
+                    with open(self.fname, 'rt') as f :
+                        lines = list(f.readlines())
+                except FileNotFoundError:
+                    raise JournalNotFoundError(self.fname)
             self.__read(lines, self.fname)
 
 

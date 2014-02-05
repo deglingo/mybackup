@@ -79,6 +79,15 @@ class Config :
             (n, CfgDisk(self, n, dconf))
             for n, dconf in conf.pop('disks').items())
 
+        # create some directories
+        # [fixme] not the right place for this !?
+        mkdir(self.lockdir)
+        mkdir(self.dbdir)
+        mkdir(self.journaldir)
+        mkdir(self.dumpdir)
+        mkdir(self.partdir)
+        mkdir(self.logdir)
+
 
     # list_disks:
     #

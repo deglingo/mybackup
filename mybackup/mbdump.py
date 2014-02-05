@@ -282,13 +282,6 @@ class MBDumpApp :
         # init the config
         assert len(args) >= 1, args
         self.config.init(args.pop(0))
-        # create some directories
-        mkdir(self.config.lockdir)
-        mkdir(self.config.dbdir)
-        mkdir(self.config.journaldir)
-        mkdir(self.config.dumpdir)
-        mkdir(self.config.partdir)
-        mkdir(self.config.logdir)
         # open the logfile and say something
         self.__open_logfile()
         trace("started at %s (with pid %d/%d)" %

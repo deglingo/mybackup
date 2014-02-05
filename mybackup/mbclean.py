@@ -4,8 +4,9 @@ import sys, getopt, logging, os, pprint
 
 from mybackup.base import *
 from mybackup.log import *
+from mybackup.tools import *
 from mybackup.config import Config
-from mybackup.journal import Journal
+from mybackup.journal import Journal, JournalNotFoundError
 
 
 # USAGE:
@@ -34,7 +35,8 @@ class MBCleanApp :
         except Exception as exc:
             error("unhandled exception: %s" % exc,
                   exc_info=sys.exc_info())
-
+            sys.exit(1)
+            
 
     # __main:
     #
@@ -81,10 +83,14 @@ class MBCleanApp :
     # __main_L:
     #
     def __main_L (self) :
-        trace("trying to open the journal")
-        self.journal = Journal(self.config.journalfile, 'r',
-                               lockfile=self.config.journallock,
-                               logger=logging.getLogger('mbclean'))
+        trace("trying to open the journal: '%s'" % self.config.journalfile)
+        try:
+            self.journal = Journal(self.config.journalfile, 'r',
+                                   lockfile=self.config.journallock,
+                                   logger=logging.getLogger('mbclean'))
+        except JournalNotFoundError:
+            info("journal not found - things seem clean")
+            return
         jinfo = self.journal.summary()
         trace("got summary:\n%s" % pprint.pformat(jinfo))
         info("journal found, cleaning up...")

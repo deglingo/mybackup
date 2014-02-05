@@ -80,6 +80,8 @@ test_crash_main()
 {
 	local day=1 hour date
 	st_sync "$ST_RUNDIR/fs/day1" "$ST_ROOTDIR/fs"
+	# make sure mbclean succeeds in a clean env
+	st_mbclean CRASH -v || die
 	# this one should work
 	hour=1; date="`st_fakedate -d$day -h$hour`"
 	trace "** RUN $hour : $date **"
