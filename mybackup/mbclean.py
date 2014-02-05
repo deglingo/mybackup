@@ -5,6 +5,7 @@ import sys, getopt, logging, os
 from mybackup.base import *
 from mybackup.log import *
 from mybackup.config import Config
+from mybackup.journal import Journal
 
 
 # USAGE:
@@ -80,7 +81,10 @@ class MBCleanApp :
     # __main_L:
     #
     def __main_L (self) :
-        trace("let's cleanup that mess now!")
+        trace("trying to open the journal")
+        self.journal = Journal(self.config.journalfile, 'r',
+                               lockfile=self.config.journallock,
+                               logger=logging.getLogger('mbclean'))
 
 
     # __log_setup:

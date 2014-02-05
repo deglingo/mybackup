@@ -6,7 +6,7 @@
 #     'FLock',
 # ]
 
-import os, fcntl, time, threading, weakref, re, types, copy
+import sys, os, fcntl, time, threading, weakref, re, types, copy
 import codecs
 from functools import partial
 
@@ -392,40 +392,3 @@ class DumpState (_DumpState) :
     def convert (value) :
         # [fixme] is it normal to get bytes objects from sq3 ?
         return DumpState.tostr(value.decode())
-
-
-# JournalState:
-#
-_JournalState = attrdict (
-    '_JournalState', 
-    (),
-    defo={'hrs': 'X',
-          'config': '',
-          'state': 'init',
-          'dumps': {},
-          'stranges': [],
-          'warnings': [],
-          'errors': []})
-
-class JournalState (_JournalState) :
-    nstranges = property(lambda s: len(s.stranges))
-    nwarnings = property(lambda s: len(s.warnings))
-    nerrors = property(lambda s: len(s.errors))
-
-
-# DumpInfo:
-#
-_DumpInfo = attrdict (
-    '_DumpInfo',
-    (),
-    defo={'state': DumpState.SELECTED,
-          'prevrun': -1,
-          'raw_size': -1,
-          'comp_size': -1,
-          'nfiles': -1})
-
-class DumpInfo (_DumpInfo) :
-    raw_hsize = property(lambda s: human_size(s.raw_size))
-    comp_hsize = property(lambda s: human_size(s.comp_size))
-    comp_ratio = property(lambda s: (s.comp_size * 100.0 / s.raw_size)
-                          if s.raw_size > 0 else 0.0)
