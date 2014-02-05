@@ -2,6 +2,7 @@
 
 import sys, getopt, logging, os
 
+from mybackup.base import *
 from mybackup.log import *
 from mybackup.config import Config
 
@@ -66,6 +67,20 @@ class MBCleanApp :
         self.__log_openfile()
         trace("started at %s (with pid %d/%d)" %
               (self.config.start_date, os.getpid(), os.getppid()))
+        # acquire the config lock
+        try:
+            with FLock(self.config.cfglockfile, block=False) :
+                self.__main_L()
+        except FLockError as exc:
+            error("could not acquire the config lock: '%s'" % self.config.cfglockfile)
+            error("(this probably means that another mb* process is running)")
+            sys.exit(1)
+
+
+    # __main_L:
+    #
+    def __main_L (self) :
+        trace("let's cleanup that mess now!")
 
 
     # __log_setup:

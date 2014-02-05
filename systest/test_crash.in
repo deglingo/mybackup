@@ -98,7 +98,7 @@ test_crash_main()
 	_MB_SYSTEST_DATE="$date" \
 		st_mbdump '!' -f CRASH -q || die
 	# mbclean should clean up the mess
-	st_mbclean CRASH || die
+	st_mbclean CRASH -v || die
 	# so a new run will succeed
 	# hour=4; date="`st_fakedate -d$day -h$hour`"
 	# trace "** RUN $hour : $date **"
