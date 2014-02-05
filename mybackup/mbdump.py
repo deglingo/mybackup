@@ -56,9 +56,9 @@ _LogLevelInfo = collections.namedtuple('_LogLevelInfo',
 _LOG_LEVEL_INFO = {
     logging.DEBUG:    _LogLevelInfo(False, '..'),
     logging.INFO:     _LogLevelInfo(False, '--'),
-    logging.WARNING:  _LogLevelInfo(False, 'WW'),
-    logging.ERROR:    _LogLevelInfo(False, 'EE'),
-    logging.CRITICAL: _LogLevelInfo(False, 'FF'),
+    logging.WARNING:  _LogLevelInfo(True, 'WW'),
+    logging.ERROR:    _LogLevelInfo(True, 'EE'),
+    logging.CRITICAL: _LogLevelInfo(True, 'FF'),
 }
 
 
