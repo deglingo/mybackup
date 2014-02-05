@@ -89,6 +89,7 @@ test_base_main()
 	st_mbclean --help >"$ST_ROOTDIR/tmp/mbclean-help.txt"
 	
 	# go
+	MBDUMP_OPTS='-v'
 	for day in `seq 1 3`; do
 		date=`st_fakedate -d$day -h1`
 		title "DAY $day" 70

@@ -45,7 +45,9 @@ _DumpInfo = attrdict (
           'prevrun': -1,
           'raw_size': -1,
           'comp_size': -1,
-          'nfiles': -1})
+          'nfiles': -1,
+          'fname': ''})
+
 
 class DumpInfo (_DumpInfo) :
     raw_hsize = property(lambda s: human_size(s.raw_size))
@@ -320,7 +322,7 @@ class Journal :
             s.dumps[kw['disk']].update(state=DumpState.STARTED,
                                        fname=kw['fname'])
         elif key == 'DUMP-FINISHED' :
-            s.dumps[kw['disk']].update(state=DumpState.check(kw['state']),
+            s.dumps[kw['disk']].update(state=DumpState.tostr(kw['state']),
                                        raw_size=kw['raw_size'],
                                        comp_size=kw['comp_size'],
                                        nfiles=kw['nfiles'])

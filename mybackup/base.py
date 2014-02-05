@@ -322,57 +322,60 @@ def _atd_deepcopy (s, m) :
 
 # enum:
 #
+class enumbase :
+
+    @classmethod
+    def check (cls, v) :
+        if isinstance(v, int) :
+            assert v in cls.byvalue, v
+        elif isinstance(v, str) :
+            assert v in cls.byname, v
+        else :
+            assert 0, v
+        return True
+
+    @classmethod
+    def toint (cls, v) :
+        if isinstance(v, int) :
+            assert v in cls.byvalue, v
+            return v
+        elif isinstance(v, str) :
+            assert v in cls.byname, v
+            return cls.byname[v]
+        else :
+            assert 0, v
+
+    @classmethod
+    def tostr (cls, v) :
+        if isinstance(v, int) :
+            assert v in cls.byvalue, v
+            return cls.byvalue[v]
+        elif isinstance(v, str) :
+            v = v.lower()
+            assert v in cls.byname, v
+            return v
+        else :
+            assert 0, v
+
+    @classmethod
+    def cmp (cls, v, *a) :
+        v = cls.toint(v)
+        for v2 in a :
+            if v == cls.toint(v2) :
+                return True
+        return False
+
+        
 def enum (tpname, fields) :
     byname, byvalue = {}, {}
     tpdict = {'byname': types.MappingProxyType(byname),
-              'byvalue': types.MappingProxyType(byvalue),
-              'check': partial(_enum_check, tpname, byname, byvalue),
-              'toint': partial(_enum_toint, tpname, byname, byvalue),
-              'tostr': partial(_enum_tostr, tpname, byname, byvalue)}
+              'byvalue': types.MappingProxyType(byvalue)}
     for value, name in enumerate(fields) :
         byname[name] = value
         byvalue[value] = name
         tpdict[name.upper()] = value
-    tp = type(tpname, (object,), tpdict)
+    tp = type(tpname, (enumbase,), tpdict)
     return tp
-
-
-# _enum_check:
-#
-def _enum_check (tpname, byname, byvalue, v) :
-    if isinstance(v, int) :
-        if v in byvalue :
-            return v
-        raise ValueError("invalid '%s' enum value: %d" % (tpname, v))
-    elif isinstance(v, str) :
-        v = v.lower()
-        if v in byname :
-            return v
-        raise ValueError("invalid '%s' enum value: '%s'" % (tpname, v))
-    else :
-        raise TypeError("invalid '%s' : %s" % (tpname, v))
-
-
-# _enum_toint:
-#
-def _enum_toint (tpname, byname, byvalue, v) :
-    _enum_check(tpname, byname, byvalue, v)
-    if isinstance(v, str) :
-        return byname[v.lower()]
-    elif isinstance(v, int) :
-        return v
-    assert 0
-
-
-# _enum_tostr:
-#
-def _enum_tostr (tpname, byname, byvalue, v) :
-    _enum_check(tpname, byname, byvalue, v)
-    if isinstance(v, str) :
-        return v
-    elif isinstance(v, int) :
-        return byvalue[v]
-    assert 0
 
     
 # DumpState:
@@ -380,10 +383,10 @@ def _enum_tostr (tpname, byname, byvalue, v) :
 _DumpState = enum(
     '_DumpState',
     ('ok', 'partial', 'failed', 'broken',
-     'selected', 'scheduled', 'started'))
+     'selected', 'scheduled', 'started', 'empty'))
 
 class DumpState (_DumpState) :
-    
+
     @staticmethod
     def adapt (*args) :
         assert 0, args

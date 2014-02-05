@@ -234,7 +234,7 @@ st_mbdump()
 	local expect=0
 	echo "${1:-}" | grep '^[!0-9]' >/dev/null \
 		&& { expect="$1"; shift; } || true
-	st_exec "$expect" mbdump "${@}"
+	st_exec "$expect" mbdump ${MBDUMP_OPTS:-} "${@}"
 }
 
 # st_mbclean
@@ -243,7 +243,7 @@ st_mbclean()
 	local expect=0
 	echo "${1:-}" | grep '^[!0-9]' >/dev/null \
 		&& { expect="$1"; shift; } || true
-	st_exec "$expect" mbclean "${@}"
+	st_exec "$expect" mbclean ${MBCLEAN_OPTS:-} "${@}"
 }
 
 

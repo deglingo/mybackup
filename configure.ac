@@ -41,6 +41,8 @@ m4_define([mb_modules], [ \
   tools \
   config \
   journal \
+  mbdb \
+  postproc \
   mbapp \
   mbdump \
   mbclean \

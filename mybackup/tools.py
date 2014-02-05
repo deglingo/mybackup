@@ -5,6 +5,7 @@ __all__ = [
     'CMDPIPE',
     'cmdexec',
     'mkdir',
+    'create_file_nc',
     'numbered_backup',
     'StrangeParser',
     'DumperTar',
@@ -41,6 +42,25 @@ def mkdir (d) :
     mkdir(os.path.dirname(d))
     #trace("creating directory '%s'" % d)
     os.mkdir(d)
+
+
+# create_file_nc:
+#
+# Create a file with the noclobber flag, trying numbered variations
+# until it succeeds. Returns the filename.
+#
+def create_file_nc (dirname, base, ext) :
+    n, sfx = 0, ''
+    while True :
+        fname = os.path.join(dirname, base + sfx + ext)
+        try:
+            fd = os.open(fname, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+        except FileExistsError:
+            n += 1
+            sfx = '.%d' % n
+            continue
+        os.close(fd)
+        return fname
 
 
 # numbered_backup:

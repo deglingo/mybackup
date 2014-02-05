@@ -7,6 +7,7 @@ from mybackup.log import *
 from mybackup.tools import *
 from mybackup.config import Config
 from mybackup.journal import Journal, JournalNotFoundError
+from mybackup import postproc
 from mybackup import mbapp
 
 
@@ -75,9 +76,10 @@ class MBCleanApp (mbapp.MBAppBase) :
             info("journal not found - the config '%s' seems clean" %
                  self.config.cfgname)
             return
+        info("journal found, cleaning up...")
         jinfo = self.journal.summary()
         trace("got summary:\n%s" % pprint.pformat(jinfo))
-        info("journal found, cleaning up...")
+        postproc.post_process(self.config, jinfo)
 
 
 # exec
