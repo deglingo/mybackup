@@ -262,7 +262,7 @@ class Journal :
             assert line[i+1] == 'x'
             char = int(line[i+2:i+4], 16)
             out += chr(char)
-            pos = i + 1
+            pos = i + 4
 
 
     # __init__:

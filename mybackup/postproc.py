@@ -84,10 +84,12 @@ class PostProcess :
                        (exc.__class__.__name__, exc))
         self.journal.record('CLEAN-END', hrs=self.config.start_hrs)
         self.journal.close()
-        # [fixme] send a report (from a fresh journal)
+        # [fixme] should not be here - send a report (from a fresh
+        # journal)
         self.journal.reopen('r', skip_postproc=False)
-        rep = report.Report(self.config, self.journal.summary())
-        trace("** %s **\n%s" % (rep.title, rep.body))
+        rep = report.Report(self.config, self.journal.summary(), width=70)
+        sep = ''.center(70, '-') + '\n'
+        info("REPORT:\n%s%s\n%s%s\n%s" % (sep, rep.title, sep, rep.body, sep))
         if sendmail(addrs=self.config.mailto, subject=rep.title, body=rep.body) != 0 :
             self.panic("sendmail failed!")
             return

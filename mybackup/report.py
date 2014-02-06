@@ -25,8 +25,8 @@ class Report :
     
     # __init__:
     #
-    def __init__ (self, config, summary, running=False) :
-        self.width = 70
+    def __init__ (self, config, summary, running=False, width=70) :
+        self.width = width
         # NOTE: only use config for infos which are not in summary!
         self.config = config
         self.summary = summary
@@ -96,7 +96,8 @@ class Report :
     def __report_body (self) :
         self.body = ''.join((self.__report_header(), '\n\n',
                              self.__report_dumps(), '\n\n',
-                             self.__report_footer(), '\n'))
+                             self.__report_footer(), '\n\n',
+                             '-- END OF REPORT --', '\n'))
 
 
     # __report_header:
@@ -127,7 +128,22 @@ class Report :
     # __report_footer:
     #
     def __report_footer (self) :
-        lines = ['FOOTER']
+        lines = []
+        if self.nerrors :
+            lines.append("")
+            lines.append(" - %s :" % plural(self.nerrors, 'error'))
+            lines.append("")
+            lines.extend(("   %s" % m) for m in self.errors)
+        if self.nwarnings :
+            lines.append("")
+            lines.append(" - %s :" % plural(self.nwarnings, 'warning'))
+            lines.append("")
+            lines.extend(("   %s" % m) for m in self.warnings)
+        if self.nstranges :
+            lines.append("")
+            lines.append(" - %s :" % plural(self.nstranges, 'strange line'))
+            lines.append("")
+            lines.extend(("   %s: %s" % (s, m)) for s, m in self.stranges)
         return '\n'.join(lines)
 
 
