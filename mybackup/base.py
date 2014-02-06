@@ -397,3 +397,31 @@ class DumpState (_DumpState) :
     def convert (value) :
         # [fixme] is it normal to get bytes objects from sq3 ?
         return DumpState.tostr(value.decode())
+
+
+# Plural forms handling
+#
+_plurals = {
+    'dump': 'dumps',
+    'DUMP': 'DUMPS',
+    'error': 'errors',
+    'warning': 'warnings',
+    'strange line': 'strange lines',
+}
+
+def plural_register (single, plural) :
+    assert single not in _plurals
+    _plurals[single] = plural
+
+def plural (n, single, plural=None, addn=True) :
+    if plural is None :
+        # [FIXME] be kind and only report an error if not found
+        plural = _plurals[single]
+    # [FIXME] does 'plural' mean >1 or !=1 ?
+    if n > 1 :
+        text = plural
+    else :
+        text = single
+    if addn :
+        text = '%d %s' % (n, text)
+    return text

@@ -23,7 +23,7 @@ _check_enabled()
 #
 test_mirror_setup()
 {
-	_check_enabled || return $?
+	_check_enabled || return 0
 
 	st_mkfile "/etc/mybackup/test/mybackup.conf" - <<EOF
 {
@@ -67,7 +67,7 @@ EOF
 #
 test_mirror_main()
 {
-	_check_enabled || return $?
+	_check_enabled || return 0
 	title "DAY 1" 70
 	st_mbdump test
 	title "DAY 2" 70

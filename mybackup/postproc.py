@@ -14,6 +14,12 @@ from mybackup import mbdb
 from mybackup import report
 
 
+# PostProcPanic:
+#
+class PostProcPanic (Exception) :
+    pass
+
+
 # PostProcess:
 #
 class PostProcess :
@@ -34,7 +40,7 @@ class PostProcess :
         exc_info = self._exc_info(exc_info)
         critical("PANIC: %s" % msg, exc_info=exc_info)
         #exc = '\n'.join(format_exception(exc_info))
-        self.panic = True
+        self.panic_count += 1
 
 
     # error:
@@ -64,6 +70,7 @@ class PostProcess :
     # run:
     #
     def run (self, config) :
+        self.panic_count = 0
         self.config = config
         self.db = mbdb.DB(self.config.dbfile)
         self.journal = journal.Journal(config.journalfile, 'a',
@@ -79,11 +86,14 @@ class PostProcess :
         self.journal.close()
         # [fixme] send a report (from a fresh journal)
         self.journal.reopen('r', skip_postproc=False)
-        rep = report.Report(self.journal.summary())
+        rep = report.Report(self.config, self.journal.summary())
         trace("** %s **\n%s" % (rep.title, rep.body))
         if sendmail(addrs=self.config.mailto, subject=rep.title, body=rep.body) != 0 :
             self.panic("sendmail failed!")
             return
+        # time to panic now
+        if self.panic_count > 0 :
+            raise PostProcPanic()
         # and roll the journal
         self.journal.roll(dirname=self.config.journaldir, hrs=self.summary.hrs)
 
@@ -174,7 +184,7 @@ class PostProcess :
     #
     def __check_dump_sanity (self, disk, dump, partfile, st) :
         # now we know that the dump exists
-        assert DumpState.cmp(dump.state, 'ok', 'partial', 'broken'), \
+        assert DumpState.cmp(dump.state, 'ok', 'partial', 'failed'), \
           DumpState.tostr(dump.state)
         trace("%s: checking dump sanity" % disk)
         # comp_size

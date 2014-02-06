@@ -65,13 +65,13 @@ class Config :
     def configure (self, conf_) :
         conf = copy.deepcopy(conf_)
         self.mailto = conf.pop('mailto', '')
-        self.report_columns = conf.pop('report_columns',
+        self.report_columns = tuple(conf.pop('report_columns',
                                        (r'\title=DISK\%(disk)s',
-                                        r'\title=STATE\center\%(state)s',
+                                        r'\title=STATE\center\%(upstate)s',
                                         r'\title=RAW SIZE\right\%(raw_hsize)s',
                                         r'\title=COMP SIZE\right\%(comp_hsize)s',
                                         r'\title=RATIO\right\%(comp_ratio).2f%%',
-                                        r'\title=FILES\right\%(nfiles)d'))
+                                        r'\title=FILES\right\%(nfiles)d')))
         self.scripts = dict(
             (n, CfgScript(self, n, sconf))
             for n, sconf in conf.get('scripts', {}).items())

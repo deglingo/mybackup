@@ -8,6 +8,7 @@ import copy
 
 from mybackup.sysconf import SYSCONF
 from mybackup.base import *
+from mybackup.asciitable import Table, Frame, Justify
 
 
 # Report:
@@ -15,9 +16,19 @@ from mybackup.base import *
 class Report :
 
 
+    ndumps = property(lambda s: len(s.summary.dumps))
+    nerrors = property(lambda s: len(s.errors))
+    nwarnings = property(lambda s: len(s.warnings))
+    nstranges = property(lambda s: len(s.stranges))
+    nnotes =  property(lambda s: len(s.notes))
+    
+    
     # __init__:
     #
-    def __init__ (self, summary, running=False) :
+    def __init__ (self, config, summary, running=False) :
+        self.width = 70
+        # NOTE: only use config for infos which are not in summary!
+        self.config = config
         self.summary = summary
         self.running = running
         self.__report_prep()
@@ -27,34 +38,44 @@ class Report :
 
     def maybe_error (self, msg) :
         if self.running :
-            self.notes.insert(0, msg)
+            self.notes.append(msg)
         else :
-            self.errors.insert(0, msg)
+            self.pre_errors.append(msg)
 
 
     # __report_prep:
     #
     def __report_prep (self) :
+        self.pre_errors = []
         self.errors = copy.deepcopy(self.summary.errors)
         self.warnings = copy.deepcopy(self.summary.warnings)
         self.stranges = copy.deepcopy(self.summary.stranges)
         self.notes = copy.deepcopy(self.summary.notes)
         # check if we started at all
         if self.summary.hrs == 'X' :
-            self.maybe_error("no starting date (dump not started?)")
+            self.maybe_error("this run did not start!?")
         if self.summary.endhrs == 'X' :
-            self.maybe_error("no ending date (dump still running or interrupted)")
+            self.maybe_error("this run did not finish properly!")
         # check if all dumps are ok
         if self.summary.dumps :
             failed = [d for d in self.summary.dumps.values()
                       if not DumpState.cmp(d.state, 'ok')]
             if failed :
-                self.maybe_error("%d dumps did not finished properly" % len(failed))
+                self.maybe_error("%s did not finished properly!"
+                                 % plural(len(failed), 'dump'))
         else :
             self.maybe_error("no dump found")
+        # check if cleaning has been done
+        if not self.summary.postprocs :
+            self.maybe_error("no post-processing done")
+        else :
+            # [fixme] check and report previous ones too ?
+            pp = self.summary.postprocs[-1]
+            if pp.endhrs == 'X' :
+                self.maybe_error("the last post-processing did not finish!")
         # format the 'error mark'
         self.errmark = ''
-        self.errmark += ('!' if self.errors else '-')
+        self.errmark += ('!' if (self.errors or self.pre_errors) else '-')
         self.errmark += ('!' if self.warnings else '-')
         self.errmark += ('!' if self.stranges else '-')
 
@@ -62,9 +83,9 @@ class Report :
     # __report_title:
     #
     def __report_title (self) :
-        fmt = "%(errmark)s %(package)s '%(config)s' REPORT [%(date)s]"
+        fmt = "%(package)s '%(config)s' REPORT [%(errmark)s] %(date)s"
         args = {'errmark': self.errmark,
-                'package': SYSCONF['PACKAGE'],
+                'package': SYSCONF['PACKAGE'].upper(),
                 'config': self.summary.config,
                 'date': hrs2date(self.summary.hrs)}
         self.title = fmt % args
@@ -73,114 +94,120 @@ class Report :
     # __report_body:
     #
     def __report_body (self) :
-        self.body = "[TODO] report body\n" + repr(self.summary)
-
-    # #############
-
-    # # __report:
-    # #
-    # def __report (self, info, width=70) :
-    #     trace("formatting report")
-    #     title = self.__report_title(info)
-
-    #     header = ['HEADER']
-
-    #     # dumps table
-    #     dumps = [l.center(70) for l in self.__report_dumps(info)]
-
-    #     body = header + dumps
-    #     return title, body
+        self.body = ''.join((self.__report_header(), '\n\n',
+                             self.__report_dumps(), '\n\n',
+                             self.__report_footer(), '\n'))
 
 
-    # # __report_dumps:
-    # #
-    # def __report_dumps (self, info) :
-    #     cols = self.__parse_columns(self.config.report_columns)                
-    #     table = asciitable.Table(len(info.dumps)+3, len(cols),
-    #                              vpad=0, hpad=1)
-    #     table.set_vpad(0, 1)
-    #     table.set_vpad(1, 1)
-    #     table.set_vpad(2, 1)
-    #     table.set_vpad(len(info.dumps)+2, 1)
-    #     table.set_vpad(len(info.dumps)+3, 1)
-    #     # table title
-    #     table_title = 'DUMP RUN %04d' % info.runid
-    #     table.add(table_title, 0, 0, 1, len(cols),
-    #               frame=asciitable.Frame.FULL, justify='center',)
-    #     # column titles
-    #     for col, (title, cfmt, kwargs) in enumerate(cols) :
-    #         table.add(title, 1, col, margins=(0, 1, 0, 1),
-    #                   frame=asciitable.Frame.FULL, justify='center')
-    #     # dump lines
-    #     nfiles_total, raw_total, comp_total = 0, 0, 0
-    #     for row, (disk, dump) in enumerate(info.dumps.items()) :
-    #         nfiles_total += dump.nfiles
-    #         raw_total += dump.raw_size
-    #         comp_total += dump.comp_size
-    #         for col, (t, cfmt, kwargs) in enumerate(cols) :
-    #             table.add(cfmt % dump, row+2, col,
-    #                       frame=asciitable.Frame.LR, **kwargs)
-    #     # total lines (if more than one dump)
-    #     if len(info.dumps) > 1 :
-    #         attr_total = {'disk': '',
-    #                       'state': '',
-    #                       'nfiles': nfiles_total,
-    #                       'raw_size': raw_total,
-    #                       'raw_hsize': human_size(raw_total),
-    #                       'comp_size': comp_total,
-    #                       'comp_hsize': human_size(comp_total),
-    #                       'comp_ratio': ((comp_total * 100.0 / raw_total)
-    #                                      if raw_total > 0 else 0.0)}
-    #         for col, (t, f, k) in enumerate(cols) :
-    #             text = (f % attr_total).strip()
-    #             table.add(text, row+3, col,
-    #                       frame=asciitable.Frame.FULL, **k)
-    #     # ok
-    #     return table.getlines(debug=0)
+    # __report_header:
+    #
+    def __report_header (self) :
+        lines = []
+        # head line
+        headline = "%s/%04d - %s - %s" % (self.summary.config,
+                                          self.summary.runid,
+                                          hrs2date(self.summary.hrs),
+                                          plural(self.ndumps, 'DUMP'))
+        lines.append(headline.center(self.width))
+        lines.append('')
+        # summary
+        for e in self.pre_errors :
+            lines.append(' - ERROR: %s' % e)
+        errs = []
+        if self.errors : errs.append('%s' % plural(self.nerrors, 'error'))
+        if self.warnings : errs.append('%s' % plural(self.nwarnings, 'warning'))
+        if self.stranges : errs.append('%s' % plural(self.nstranges, 'strange line'))
+        if errs :
+            lines.append(" - WARNING: %s reported in this dump"
+                          % ', '.join(errs))
+        # join all
+        return '\n'.join(lines)
 
 
-    # # __parse_columns:
-    # #
-    # def __parse_columns (self, colspecs) :
-    #     cols = []
-    #     for cspec in colspecs :
-    #         #trace("CSPEC: '%s'" % cspec)
-    #         title = ''
-    #         kwargs = {}
-    #         while cspec and cspec[0] == "\\" :
-    #             end = cspec.find("\\", 1)
-    #             if end < 0 :
-    #                 cspec = cspec[1:]
-    #                 break
-    #             attr = cspec[1:end]
-    #             cspec = cspec[end:]
-    #             eq = attr.find('=')
-    #             if eq >= 0 :
-    #                 atname, atval = attr[:eq], attr[eq+1:]
-    #             else :
-    #                 atname, atval = attr, ''
-    #             if atname == 'title' :
-    #                 title = atval
-    #             elif atname == 'left' :
-    #                 kwargs['justify'] = left
-    #             elif atname == 'right' :
-    #                 kwargs['justify'] = 'right'
-    #             elif atname == 'center' :
-    #                 kwargs['justify'] = 'center'
-    #             else :
-    #                 assert 0, (atname, atval)
-    #         cols.append((title, cspec, kwargs))
-    #         #trace(" -> %s" % repr(cols[-1]))
-    #     return cols
-        
+    # __report_footer:
+    #
+    def __report_footer (self) :
+        lines = ['FOOTER']
+        return '\n'.join(lines)
 
-    # # __report_title:
-    # #
-    # def __report_title (self, info) :
-    #     mark = '--'
-    #     title = "%(package)s '%(config)s' REPORT %(status_mark)s %(date)s" \
-    #       % {'package': self.config.system.PACKAGE.upper(),
-    #          'config': info.config,
-    #          'status_mark': mark,
-    #          'date': hrs2date(info.hrs)}
-    #     return title
+
+    # __report_dumps:
+    #
+    def __report_dumps (self) :
+        table = Table()
+        # parse column specs (title, format, args)
+        cspecs = self.__parse_columns(self.config.report_columns)
+        # big title
+        big_title = "%s/%04d - %s" % (self.summary.config,
+                                      self.summary.runid,
+                                      hrs2date(self.summary.hrs))
+        table.add(big_title, 0, 0, 1, len(cspecs), frame=Frame.BOX,
+                  justify=Justify.CENTER)
+        # columns titles
+        for c, col in enumerate(cspecs) :
+            table.add(col[0], 1, c, frame=Frame.BOX, justify=Justify.CENTER)
+        # columns content
+        t_state, t_raw, t_comp, t_files = DumpState.OK, 0, 0, 0
+        ndumps = len(self.summary.dumps)
+        last = ndumps - 1
+        for r, dump in enumerate(self.summary.dumps.values()) :
+            if not DumpState.cmp(dump.state, 'ok') :
+                t_state = DumpState.FAILED
+            t_raw += dump.raw_size
+            t_comp += dump.comp_size
+            t_files += dump.nfiles
+            for c, col in enumerate(cspecs) :
+                text = col[1] % dump
+                frame = (Frame.LR | (Frame.BOTTOM if r == last else 0))
+                table.add(text, r+2, c, frame=frame, **col[2])
+        # totals line
+        if ndumps > 1 :
+            total_row = ndumps + 2
+            t_attrs = {'disk': '',
+                       'upstate': DumpState.tostr(t_state).upper(),
+                       'raw_hsize': human_size(t_raw),
+                       'comp_hsize': human_size(t_comp),
+                       'comp_ratio': ((t_comp * 100.0 / t_raw) if t_raw > 0 else 0.0),
+                       'nfiles': t_files}
+            for c, col in enumerate(cspecs) :
+                text = col[1] % t_attrs
+                table.add(text, total_row, c, frame=Frame.BOX, **col[2])
+        # dump
+        lines = table.getlines()
+        tab = ' ' * ((self.width - len(lines[0])) // 2)
+        return '\n'.join((tab+l) for l in lines)
+
+
+    # __parse_columns:
+    #
+    def __parse_columns (self, colspecs) :
+        cols = []
+        for cspec in colspecs :
+            #trace("CSPEC: '%s'" % cspec)
+            title = ''
+            kwargs = {}
+            while cspec and cspec[0] == "\\" :
+                end = cspec.find("\\", 1)
+                if end < 0 :
+                    cspec = cspec[1:]
+                    break
+                attr = cspec[1:end]
+                cspec = cspec[end:]
+                eq = attr.find('=')
+                if eq >= 0 :
+                    atname, atval = attr[:eq], attr[eq+1:]
+                else :
+                    atname, atval = attr, ''
+                if atname == 'title' :
+                    title = atval
+                elif atname == 'left' :
+                    kwargs['justify'] = Justify.LEFT
+                elif atname == 'right' :
+                    kwargs['justify'] = Justify.RIGHT
+                elif atname == 'center' :
+                    kwargs['justify'] = Justify.CENTER
+                else :
+                    assert 0, (atname, atval)
+            cols.append((title, cspec, kwargs))
+            #trace(" -> %s" % repr(cols[-1]))
+        return cols

@@ -57,6 +57,7 @@ _DumpInfo = attrdict (
           'fname': ''})
 
 class DumpInfo (_DumpInfo) :
+    upstate = property(lambda s: DumpState.tostr(s.state).upper())
     raw_hsize = property(lambda s: human_size(s.raw_size))
     comp_hsize = property(lambda s: human_size(s.comp_size))
     comp_ratio = property(lambda s: (s.comp_size * 100.0 / s.raw_size)

@@ -95,11 +95,13 @@ def numbered_backup (fname) :
 def sendmail (addrs, subject, body) :
     mailer = 'Mail' # [fixme]
     addrlist = [a for a in addrs.split(':') if a]
+    if not addrlist :
+        warning("mailto no set, no mail will be sent")
+        return 0
     trace("sending mail to %d address(es)" % len(addrlist))
     proc = cmdexec([mailer, '-s', subject] + addrlist,
                    stdin=CMDPIPE, universal_newlines=True)
     proc.stdin.write(body)
-    proc.stdin.write('\n')
     proc.stdin.close()
     r = proc.wait()
     if r != 0 :
