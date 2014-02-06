@@ -373,7 +373,9 @@ def enum (tpname, fields) :
     for value, name in enumerate(fields) :
         byname[name] = value
         byvalue[value] = name
-        tpdict[name.upper()] = value
+        uname = name.upper()
+        tpdict[uname] = value
+        tpdict['_'+uname] = name
     tp = type(tpname, (enumbase,), tpdict)
     return tp
 

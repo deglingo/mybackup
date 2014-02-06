@@ -146,14 +146,17 @@ class CfgDisk :
 
     # get_dumpname:
     #
-    def get_dumpname (self, runid, level, prevrun, hrs) :
-        return 'mbdump.%(config)s.%(disk)s.%(runid)03d.%(level)d-%(prevrun)03d.%(hrs)s' % {
+    def get_dumpname (self, runid, level, prevrun, hrs, state) :
+        state = '' if DumpState.cmp(state, 'ok') \
+          else ('.' + DumpState.tostr(state).upper())
+        return 'mbdump.%(config)s.%(disk)s.%(runid)03d.%(level)d-%(prevrun)03d.%(hrs)s%(state)s' % {
             'config': self.config.cfgname,
             'disk': self.name,
             'runid': runid,
             'level': level,
             'prevrun': prevrun,
-            'hrs': hrs }
+            'hrs': hrs,
+            'state': state }
 
     
     # get_dumpext:

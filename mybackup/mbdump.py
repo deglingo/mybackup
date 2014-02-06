@@ -144,7 +144,8 @@ class MBDumpApp (mbapp.MBAppBase) :
         # go
         self.__process(sched)
         # cleanup
-        postproc.post_process(self.config, self.journal.summary())
+        pp = postproc.PostProcess()
+        pp.run(self.config)
         # report
         title, body = self.__report(self.journal.summary())
         trace("**  %s  **\n%s" % (title, '\n'.join(body)))
@@ -207,8 +208,7 @@ class MBDumpApp (mbapp.MBAppBase) :
         # open the journal
         try:
             self.journal = Journal(self.config.journalfile, 'w',
-                                   lockfile=self.config.journallock,
-                                   logger=logging.getLogger('mbdump'))
+                                   lockfile=self.config.journallock)
         except FileExistsError:
             error("could not open journal file: '%s'" % self.config.journalfile)
             error("this probably means that an earlier run failed, please run \`mbclean %s'" %
@@ -224,6 +224,9 @@ class MBDumpApp (mbapp.MBAppBase) :
         # run
         for dsched in sched :
             self.__process_dump(dsched)
+        # close the journal
+        self.journal.record('END', hrs=stamp2hrs(int(time.time())))
+        self.journal.close()
 
 
     # trigger_hooks:

@@ -16,6 +16,9 @@ class JournalNotFoundError (Exception) :
     def __init__ (self, fname) :
         Exception.__init__(self, "journal file not found: '%s'" % fname)
 
+class JournalRollError (Exception) :
+    pass
+
         
 # JournalState:
 #
@@ -23,18 +26,22 @@ _JournalState = attrdict (
     '_JournalState', 
     (),
     defo={'hrs': 'X',
+          'endhrs': 'X',
           'config': '',
           'state': 'init',
           'dumps': {},
           'stranges': [],
           'warnings': [],
-          'errors': []})
+          'errors': [],
+          'postprocs': [],
+          'current_postproc': None})
+
 
 class JournalState (_JournalState) :
     nstranges = property(lambda s: len(s.stranges))
     nwarnings = property(lambda s: len(s.warnings))
     nerrors = property(lambda s: len(s.errors))
-
+    
 
 # DumpInfo:
 #
@@ -48,7 +55,6 @@ _DumpInfo = attrdict (
           'nfiles': -1,
           'fname': ''})
 
-
 class DumpInfo (_DumpInfo) :
     raw_hsize = property(lambda s: human_size(s.raw_size))
     comp_hsize = property(lambda s: human_size(s.comp_size))
@@ -56,14 +62,26 @@ class DumpInfo (_DumpInfo) :
                           if s.raw_size > 0 else 0.0)
 
 
+# PostProcInfo:
+#
+PostProcInfo = attrdict(
+    'PostProcInfo',
+    (),defo={'hrs': 'X',
+             'endhrs': 'X',
+             'panics': []})
+
+
+
 # LogJournalHandler:
+#
+# [FIXME] very strange
 #
 class LogJournalHandler (LogBaseHandler) :
 
 
     KEYMAP = {
-        logging.WARNING: 'WARNING',
-        logging.ERROR: 'ERROR',
+        logging.WARNING:  'WARNING',
+        logging.ERROR:    'ERROR',
         logging.CRITICAL: 'ERROR',
     }
 
@@ -86,6 +104,8 @@ class LogJournalHandler (LogBaseHandler) :
     #
     def emit (self, rec) :
         j = self.journal()
+        if not j.isopen() :
+            return
         if j is None :
             assert 0
         key = LogJournalHandler.KEYMAP[rec.levelno]
@@ -101,6 +121,8 @@ class Journal :
         'START':  (('config', 'str'),
                    ('runid',  'uint'),
                    ('hrs',    'hrs')),
+
+        'END': (('hrs', 'hrs'),),
                    
         'SELECT': (('disks', 'str'),),
 
@@ -111,7 +133,7 @@ class Journal :
                           ('fname', 'str')),
         
         'DUMP-FINISHED': (('disk',  'str'),
-                          ('state', 'str'),
+                          ('state', 'dumpstate'),
                           ('raw_size', 'int'),
                           ('comp_size', 'int'),
                           ('nfiles',    'int')),
@@ -122,6 +144,16 @@ class Journal :
         'WARNING': (('message', 'str'),),
 
         'ERROR': (('message', 'str'),),
+
+        # mbclean only
+        'CLEAN-START': (('hrs', 'hrs'),),
+
+        'CLEAN-END': (('hrs', 'hrs'),),
+
+        'CLEAN-PANIC': (('message', 'str'),),
+
+        'DUMP-FIX': (('disk', 'str'),
+                     ('state', 'dumpstate')),
     }
 
 
@@ -194,6 +226,14 @@ class Journal :
     def __convert_hrs (v) :
         return check_hrs(v)
 
+    @staticmethod
+    def __adapt_dumpstate (v) :
+        return DumpState.tostr(v)
+
+    @staticmethod
+    def __convert_dumpstate (v) :
+        return DumpState.tostr(v)
+
 
     # (un)escaping:
     #
@@ -221,45 +261,98 @@ class Journal :
             char = int(line[i+2:i+4], 16)
             out += chr(char)
             pos = i + 1
-    
+
 
     # __init__:
     #
-    def __init__ (self, fname, mode, lockfile, logger) :
+    def __init__ (self, fname, mode, lockfile) :
+        logger = logging.getLogger(log_domain())
         self.lockfile = lockfile
+        self.tlock = threading.Lock() # useless ?
         self.fname = fname
         self.mode = mode
         self.state = JournalState()
+        self.__open = True
         if mode == 'w' :
             # [FIXME] !!
             trace("opening journal '%s' for writing" % self.fname)
             with self.flock :
                 fd = os.open(self.fname, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
                 os.close(fd)
+            self
             # captures all log errors and warnings
             logger.addHandler(LogJournalHandler(self))
-        else :
+        elif mode == 'a' :
+            trace("opening journal '%s' for (append) writing" % self.fname)
             with self.flock :
-                try:
-                    with open(self.fname, 'rt') as f :
-                        lines = list(f.readlines())
-                except FileNotFoundError:
-                    raise JournalNotFoundError(self.fname)
-            self.__read(lines, self.fname)
+                self.__read_file()
+            # captures all log errors and warnings
+            logger.addHandler(LogJournalHandler(self))
+        elif mode == 'r' :
+            with self.flock :
+                self.__read_file()
+            self.__open = False # ?
+        else :
+            assert 0, mode
+
+
+    # isopen:
+    #
+    def isopen (self) :
+        with self.tlock :
+            return self.__open
+
+
+    # close:
+    #
+    def close (self) :
+        with self.tlock :
+            if not self.__open :
+                self.__open = False
+
+
+    # summary:
+    #
+    def summary (self) :
+        with self.tlock :
+            return copy.deepcopy(self.state)
+
+
+    # roll:
+    #
+    # [FIXME] we should have a 'closed' flag to make sure we don't
+    # read/write after a roll!
+    #
+    def roll (self, dirname, hrs) :
+        with self.flock :
+            self.__roll(dirname, hrs)
+
+
+    # __read_file:
+    #
+    def __read_file (self) :
+        try:
+            f = open(self.fname, 'rt')
+        except FileNotFoundError:
+            raise JournalNotFoundError(self.fname)
+        try:
+            self.__read(f, self.fname)
+        finally:
+            f.close()
 
 
     # __read:
     #
-    def __read (self, lines, fname) :
+    def __read (self, f, fname) :
         trace("parsing journal lines")
-        for lno, l in enumerate(lines) :
-            l = l.strip()
-            if not l : continue
+        for lno, line in enumerate(f) :
+            line = line.strip()
+            if not line : continue
             try:
-                self.__read_line(l)
+                self.__read_line(line)
             except Exception:
                 exception("%s:%d: invalid journal line: '%s'" %
-                          (fname, lno+1, l))
+                          (fname, lno+1, line))
                 continue
 
     def __read_line (self, line) :
@@ -272,57 +365,56 @@ class Journal :
         kwargs = {}
         for i, (pname, ptype) in enumerate(kspecs) :
             kwargs[pname] = self.adapt(ptype, argv[i])
-        self._update(key, kwargs)
+        self.__update(key, kwargs)
 
 
-    # summary:
+    # __roll:
     #
-    def summary (self) :
-        return copy.deepcopy(self.state)
-
-
-    # roll:
-    #
-    # [FIXME] we should have a 'closed' flag to make sure we don't
-    # read/write after a roll!
-    #
-    def roll (self, dirname, hrs) :
-        n, sfx = 0, ''
+    def __roll (self, dirname, hrs) :
+        self.close()
+        # first make sure the dest is OK
         base, ext = os.path.splitext(os.path.basename(self.fname))
-        while True :
-            dest = os.path.join(dirname, base + sfx + ext)
-            try:
-                fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
-            except FileExistsError:
-                n += 1
-                sfx = '.%d' % n
-                continue
+        dest = os.path.join(dirname, base + '.' + hrs + ext)
+        trace("rolling journal to '%s'" % dest)
+        try:
+            fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+        except FileExistsError:
+            # it can exist but must be empty
+            st = os.stat(dest)
+            if not (stat.S_ISREG(st.st_mode) and st.st_size == 0) :
+                msg = ("could not roll journal '%s' : " +
+                       "file '%s' exists and is not empty!") \
+                       % (self.fname, dest)
+                raise JournalRollError(msg)
+        else:
             os.close(fd)
-            trace("rolling journal file: '%s'" % dest)
-            os.rename(self.fname, dest)
-            return
+        # ok, go
+        self.close()
+        os.rename(self.fname, dest)
 
 
-    # _update:
+    # __update:
     #
-    def _update (self, key, kw) :
+    def __update (self, key, kw) :
         s = self.state
         if key == 'START' :
             s.update(state='started',
                      config=kw['config'],
                      runid=kw['runid'],
                      hrs=kw['hrs'])
+        elif key == 'END' :
+            s.update(endhrs=kw['hrs'])
         elif key == 'SELECT' :
             for d in kw['disks'].split(',') :
                 s.dumps[d] = DumpInfo(disk=d)
         elif key == 'SCHEDULE' :
-            s.dumps[kw['disk']].update(state=DumpState.SCHEDULED,
+            s.dumps[kw['disk']].update(state=DumpState._SCHEDULED,
                                        prevrun=kw['prevrun'])
         elif key == 'DUMP-START' :
-            s.dumps[kw['disk']].update(state=DumpState.STARTED,
+            s.dumps[kw['disk']].update(state=DumpState._STARTED,
                                        fname=kw['fname'])
         elif key == 'DUMP-FINISHED' :
-            s.dumps[kw['disk']].update(state=DumpState.tostr(kw['state']),
+            s.dumps[kw['disk']].update(state=kw['state'],
                                        raw_size=kw['raw_size'],
                                        comp_size=kw['comp_size'],
                                        nfiles=kw['nfiles'])
@@ -332,6 +424,18 @@ class Journal :
             s.warnings.append((kw['message'],))
         elif key == 'ERROR' :
             s.errors.append((kw['message'],))
+        elif key == 'CLEAN-START' :
+            assert kw['hrs'] not in s.postprocs
+            pp = PostProcInfo(hrs=kw['hrs'])
+            s.postprocs.append(pp)
+            s.current_postproc = pp
+        elif key == 'CLEAN-END' :
+            assert s.current_postproc is not None
+            s.current_postproc.update(endhrs=kw['hrs'])
+            s.current_postproc = None
+        elif key == 'DUMP-FIX' :
+            assert s.current_postproc is not None
+            # [FIXME] skip_clean flag
         else :
             assert 0, (key, kw)
         # trace("JOURNAL UPDATE: %s\n%s" %
@@ -341,6 +445,8 @@ class Journal :
     # record:
     #
     def record (self, key, **kwargs) :
+        assert self.mode in ('w', 'a')
+        assert self.isopen()
         with self.flock :
             self.__record(key, **kwargs)
 
@@ -352,7 +458,7 @@ class Journal :
             pval = Journal.convert(ptype, kwargs[pname])
             line.append(pval)
         # update state
-        self._update(key, kwargs)
+        self.__update(key, kwargs)
         # write
         # [FIXME] probably some sync needed here
         trace("JOURNAL:%s: %s" % (key, ', '.join("'%s'" % w for w in line[1:])))

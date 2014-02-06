@@ -13,7 +13,8 @@ ST_ROOTDIR="$BUILDDIR/st-root"
 ST_SAVEDIR="$BUILDDIR/st-save"
 ST_RUNBASEDIR="$BUILDDIR/st-run"
 
-: ${MB_SYSTEST_MODULES:='@MB_SYSTEST_MODULES@'}
+MB_SYSTEST_MODULES='@MB_SYSTEST_MODULES@'
+: ${ST_MODULES:=$MB_SYSTEST_MODULES}
 
 
 # trace:
@@ -108,7 +109,7 @@ main()
 {
 	local mod errs=0 nruns=0 errlist=
 	global_setup
-	for mod in $MB_SYSTEST_MODULES; do
+	for mod in $ST_MODULES; do
 		nruns=`expr $nruns + 1`
 		info -n " - $mod ..."
 		if run_module "$mod"; then
@@ -130,7 +131,7 @@ main()
 		r=1
 		info "TEST RESULT: FAILED!! ($errs errors on $nruns modules)"
 	fi
-	for mod in $MB_SYSTEST_MODULES; do
+	for mod in $ST_MODULES; do
 		local mr=1; isin $mod $errlist || mr=0
 		if [ ${VERBOSE:-0} -ne 0 -o $mr -ne 0 ]; then
 			info "$sep1"

@@ -78,9 +78,6 @@ getpid()
 #
 test_crash_main()
 {
-	MBDUMP_OPTS='-v -f'
-	MBCLEAN_OPTS='-v'
-
 	local day=1 hour date
 	st_sync "$ST_RUNDIR/fs/day1" "$ST_ROOTDIR/fs"
 	# make sure mbclean succeeds in a clean env
@@ -89,26 +86,26 @@ test_crash_main()
 	hour=1; date="`st_fakedate -d$day -h$hour`"
 	trace "** RUN $hour : $date **"
 	_MB_SYSTEST_DATE="$date" \
-		st_mbdump CRASH || die
+		st_mbdump -f CRASH || die
 	# this must fail
 	hour=2; date="`st_fakedate -d$day -h$hour`"
 	trace "** RUN $hour : $date **"
 	_MB_SYSTEST_DATE="$date" \
 		MB_TEST_CRASH_TRIGGER='schedule' \
-		st_mbdump '!' -f CRASH -q || die
+		st_mbdump '!' -f -f CRASH -q || die
 	# make sure it won't run again (because the journal is still
 	# present)
 	hour=3; date="`st_fakedate -d$day -h$hour`"
 	trace "** RUN $hour : $date **"
 	_MB_SYSTEST_DATE="$date" \
-		st_mbdump '!' CRASH -q || die
+		st_mbdump '!' -f CRASH -q || die
 	# mbclean should clean up the mess
 	st_mbclean CRASH || die
 	# so a new run will succeed
 	hour=4; date="`st_fakedate -d$day -h$hour`"
 	trace "** RUN $hour : $date **"
-	# _MB_SYSTEST_DATE="$date" \
-	# 	st_mbdump -f CRASH || die
+	_MB_SYSTEST_DATE="$date" \
+		st_mbdump -f CRASH || die
 	# all done
 	trace "OK"
 }

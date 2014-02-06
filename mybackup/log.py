@@ -2,6 +2,7 @@
 
 __all__ = [
     'log_setup',
+    'log_domain',
     'trace',
     'info',
     'warning',
@@ -24,6 +25,12 @@ _log_setup_lock = threading.Lock()
 
 _DOMAIN = '<notset>'
 _setup_done = False
+
+
+# log_domain:
+#
+def log_domain () :
+    return _DOMAIN
 
 
 # log_setup:

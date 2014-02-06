@@ -70,8 +70,7 @@ class MBCleanApp (mbapp.MBAppBase) :
         trace("trying to open the journal: '%s'" % self.config.journalfile)
         try:
             self.journal = Journal(self.config.journalfile, 'r',
-                                   lockfile=self.config.journallock,
-                                   logger=logging.getLogger('mbclean'))
+                                   lockfile=self.config.journallock)
         except JournalNotFoundError:
             info("journal not found - the config '%s' seems clean" %
                  self.config.cfgname)
@@ -79,7 +78,8 @@ class MBCleanApp (mbapp.MBAppBase) :
         info("journal found, cleaning up...")
         jinfo = self.journal.summary()
         trace("got summary:\n%s" % pprint.pformat(jinfo))
-        postproc.post_process(self.config, jinfo)
+        pp = postproc.PostProcess()
+        pp.run(self.config)
 
 
 # exec

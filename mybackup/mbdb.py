@@ -139,6 +139,9 @@ class DB :
     # record_dump:
     #
     def record_dump (self, disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles) :
+        # [FIXME] must be carefull with 'state' because i didn't find
+        # a way to automatically 'adapt' it
+        state = DumpState.tostr(state)
         self._execute('insert into dumps ' +
                       '(disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles) ' +
                       'values (?, ?, ?, ?, ?, ?, ?, ?)',
