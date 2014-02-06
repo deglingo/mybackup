@@ -21,7 +21,7 @@ test_crash_setup()
 		st_setup_fs "$DAY0" "$ST_RUNDIR/fs" 1 _setup_day_;
 		date >"$ST_RUNDIR/fs.stamp-h"; }
 
-	st_mkfile "/etc/mybackup/CRASH/mybackup.conf" - <<EOF
+	st_mkfile "/etc/mybackup/TESTCRASH/mybackup.conf" - <<EOF
 {
   "mailto": "${MYBACKUP_SYSTEST_MAILTO:-}",
   "scripts": {
@@ -43,7 +43,7 @@ test_crash_setup()
 }
 EOF
 
-	st_mkfile -m755 "/etc/mybackup/CRASH/killer" - <<EOF
+	st_mkfile -m755 "/etc/mybackup/TESTCRASH/killer" - <<EOF
 #!/bin/sh
 trace() { echo "KILLER: \$*"; }
 LOGFILE="$ST_ROOTDIR/tmp/killer.log"
@@ -81,31 +81,31 @@ test_crash_main()
 	local day=1 hour date
 	st_sync "$ST_RUNDIR/fs/day1" "$ST_ROOTDIR/fs"
 	# make sure mbclean succeeds in a clean env
-	st_mbclean CRASH || die
+	st_mbclean TESTCRASH || die
 	# this one should work
 	hour=1; date="`st_fakedate -d$day -h$hour`"
 	trace "** RUN $hour : $date **"
 	_MB_SYSTEST_DATE="$date" \
-		st_mbdump -f CRASH || die
+		st_mbdump -f TESTCRASH || die
 	# this must fail
 	hour=2; date="`st_fakedate -d$day -h$hour`"
 	trace "** RUN $hour : $date **"
 	_MB_SYSTEST_DATE="$date" \
 		MB_TEST_CRASH_TRIGGER='schedule' \
-		st_mbdump '!' -f -f CRASH -q || die
+		st_mbdump '!' -f -f TESTCRASH -q || die
 	# make sure it won't run again (because the journal is still
 	# present)
 	hour=3; date="`st_fakedate -d$day -h$hour`"
 	trace "** RUN $hour : $date **"
 	_MB_SYSTEST_DATE="$date" \
-		st_mbdump '!' -f CRASH -q || die
+		st_mbdump '!' -f TESTCRASH -q || die
 	# mbclean should clean up the mess
-	st_mbclean CRASH || die
+	st_mbclean TESTCRASH || die
 	# so a new run will succeed
 	hour=4; date="`st_fakedate -d$day -h$hour`"
 	trace "** RUN $hour : $date **"
 	_MB_SYSTEST_DATE="$date" \
-		st_mbdump -f CRASH || die
+		st_mbdump -f TESTCRASH || die
 	# all done
 	trace "OK"
 }

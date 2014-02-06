@@ -41,7 +41,7 @@ test_base_setup()
 		st_setup_fs "$DAY0" "$ST_RUNDIR/fs" 3 _setup_day_;
 		date >"$ST_RUNDIR/fs.stamp-h"; }
 
-	st_mkfile "/etc/mybackup/TEST/mybackup.conf" - <<EOF
+	st_mkfile "/etc/mybackup/TESTBASE/mybackup.conf" - <<EOF
 {
   "mailto": "${MYBACKUP_SYSTEST_MAILTO:-}",
   "scripts": {
@@ -69,7 +69,7 @@ test_base_setup()
 }
 EOF
 
-	st_mkfile -m755 "/etc/mybackup/TEST/HOOK" - <<EOF
+	st_mkfile -m755 "/etc/mybackup/TESTBASE/HOOK" - <<EOF
 #!/bin/sh
 echo "HOOK: \$# ARGS:"
 for A in \$@; do
@@ -94,14 +94,14 @@ test_base_main()
 		date=`st_fakedate -d$day -h1`
 		title "DAY $day" 70
 		st_sync "$ST_RUNDIR/fs/day$day" "$ST_ROOTDIR/fs"
-		_MB_SYSTEST_DATE="$date" st_mbdump TEST
+		_MB_SYSTEST_DATE="$date" st_mbdump TESTBASE
 		# just one time, make sure this does nothing
 		test $day -ne 1 || {
 			date=`st_fakedate -d$day -h2`;
-			_MB_SYSTEST_DATE="$date" st_mbdump TEST; }
+			_MB_SYSTEST_DATE="$date" st_mbdump TESTBASE; }
 		# also try the -f options
 		test $day -ne 1 || {
 			date=`st_fakedate -d$day -h2`;
-			_MB_SYSTEST_DATE="$date" st_mbdump -f TEST; }
+			_MB_SYSTEST_DATE="$date" st_mbdump -f TESTBASE; }
 	done
 }
