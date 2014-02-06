@@ -30,6 +30,7 @@ _JournalState = attrdict (
           'config': '',
           'state': 'init',
           'dumps': {},
+          'notes': [],
           'stranges': [],
           'warnings': [],
           'errors': [],
