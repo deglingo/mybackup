@@ -7,6 +7,7 @@ __all__ = [
     'mkdir',
     'create_file_nc',
     'numbered_backup',
+    'sendmail',
     'StrangeParser',
     'DumperTar',
 ]
@@ -87,6 +88,23 @@ def numbered_backup (fname) :
         os.rename(tmp, bak)
         trace("backup: '%s' -> '%s'" % (fname, bak))
         break
+
+
+# sendmail:
+#
+def sendmail (addrs, subject, body) :
+    mailer = 'Mail' # [fixme]
+    addrlist = [a for a in addrs.split(':') if a]
+    trace("sending mail to %d address(es)" % len(addrlist))
+    proc = cmdexec([mailer, '-s', subject] + addrlist,
+                   stdin=CMDPIPE, universal_newlines=True)
+    proc.stdin.write(body)
+    proc.stdin.write('\n')
+    proc.stdin.close()
+    r = proc.wait()
+    if r != 0 :
+        error("sendmail (%s) failed: %s" % (mailer, r))
+    return r
 
 
 # StrangeParser:

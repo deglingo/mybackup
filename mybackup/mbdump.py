@@ -146,23 +146,6 @@ class MBDumpApp (mbapp.MBAppBase) :
         # cleanup
         pp = postproc.PostProcess()
         pp.run(self.config)
-        # report
-        title, body = self.__report(self.journal.summary())
-        trace("**  %s  **\n%s" % (title, '\n'.join(body)))
-        # mail
-        for addr in self.config.mailto.split(':') :
-            addr = addr.strip()
-            if not addr : continue
-            info("sending mail report to '%s'" % addr)
-            proc = cmdexec(["Mail", "-s", title, addr], stdin=CMDPIPE,
-                           universal_newlines=True)
-            proc.stdin.write('\n'.join(body))
-            proc.stdin.write('\n')
-            proc.stdin.close()
-            r = proc.wait()
-            assert r == 0, r
-        # [FIXME] roll the journal
-        self.journal.roll(self.config.journaldir, self.config.start_hrs)
         # ok
         info("all done, bye!")
 

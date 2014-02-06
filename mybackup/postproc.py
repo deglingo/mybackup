@@ -11,6 +11,7 @@ from mybackup.log import *
 from mybackup.tools import *
 from mybackup import journal
 from mybackup import mbdb
+from mybackup import report
 
 
 # PostProcess:
@@ -66,7 +67,7 @@ class PostProcess :
         self.config = config
         self.db = mbdb.DB(self.config.dbfile)
         self.journal = journal.Journal(config.journalfile, 'a',
-                                       config.journallock)
+                                       config.journallock, skip_postproc=True)
         self.summary = self.journal.summary()
         self.journal.record('CLEAN-START', hrs=self.config.start_hrs)
         try:
@@ -76,6 +77,15 @@ class PostProcess :
                        (exc.__class__.__name__, exc))
         self.journal.record('CLEAN-END', hrs=self.config.start_hrs)
         self.journal.close()
+        # [fixme] send a report (from a fresh journal)
+        self.journal.reopen('r', skip_postproc=False)
+        rep = report.Report(self.journal.summary())
+        trace("** %s **\n%s" % (rep.title, rep.body))
+        if sendmail(addrs=self.config.mailto, subject=rep.title, body=rep.body) != 0 :
+            self.panic("sendmail failed!")
+            return
+        # and roll the journal
+        self.journal.roll(dirname=self.config.journaldir, hrs=self.summary.hrs)
 
 
     # __run:

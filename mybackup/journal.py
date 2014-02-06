@@ -265,35 +265,43 @@ class Journal :
 
     # __init__:
     #
-    def __init__ (self, fname, mode, lockfile) :
-        logger = logging.getLogger(log_domain())
+    def __init__ (self, fname, mode, lockfile, skip_postproc=False) :
         self.lockfile = lockfile
         self.tlock = threading.Lock() # useless ?
         self.fname = fname
         self.mode = mode
+        self.skip_postproc = skip_postproc
+        self.__open = False
+        self.__doopen()
+
+
+    # __doopen:
+    #
+    def __doopen (self) :
+        logger = logging.getLogger(log_domain())
+        assert not self.isopen()
         self.state = JournalState()
         self.__open = True
-        if mode == 'w' :
+        if self.mode == 'w' :
             # [FIXME] !!
             trace("opening journal '%s' for writing" % self.fname)
             with self.flock :
                 fd = os.open(self.fname, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
                 os.close(fd)
-            self
             # captures all log errors and warnings
             logger.addHandler(LogJournalHandler(self))
-        elif mode == 'a' :
+        elif self.mode == 'a' :
             trace("opening journal '%s' for (append) writing" % self.fname)
             with self.flock :
                 self.__read_file()
             # captures all log errors and warnings
             logger.addHandler(LogJournalHandler(self))
-        elif mode == 'r' :
+        elif self.mode == 'r' :
             with self.flock :
                 self.__read_file()
             self.__open = False # ?
         else :
-            assert 0, mode
+            assert 0, self.mode
 
 
     # isopen:
@@ -303,12 +311,20 @@ class Journal :
             return self.__open
 
 
+    # reopen:
+    #
+    def reopen (self, mode, skip_postproc=False) :
+        self.close()
+        self.mode = mode
+        self.skip_postproc = skip_postproc
+        self.__doopen()
+
+
     # close:
     #
     def close (self) :
         with self.tlock :
-            if not self.__open :
-                self.__open = False
+            self.__open = False
 
 
     # summary:
@@ -397,6 +413,11 @@ class Journal :
     #
     def __update (self, key, kw) :
         s = self.state
+        # skip postproc messages
+        if key != 'CLEAN-END' and self.skip_postproc and s.current_postproc is not None :
+            # trace ?
+            return
+        # choose your key
         if key == 'START' :
             s.update(state='started',
                      config=kw['config'],
@@ -435,7 +456,6 @@ class Journal :
             s.current_postproc = None
         elif key == 'DUMP-FIX' :
             assert s.current_postproc is not None
-            # [FIXME] skip_clean flag
         else :
             assert 0, (key, kw)
         # trace("JOURNAL UPDATE: %s\n%s" %
