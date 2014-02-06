@@ -26,7 +26,8 @@ class MBAppBase :
                 app.__init()
                 app.__run()
             except Exception as exc:
-                exception("unhandled exception: %s" % exc)
+                exception("unhandled exception: %s: %s" %
+                          (exc.__class__.__name__, exc))
                 r = 1
         finally:
             logging.shutdown()
