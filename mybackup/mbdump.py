@@ -24,7 +24,7 @@ from mybackup import mbapp
 # USAGE:
 #
 USAGE = """\
-USAGE: mbdump [OTPIONS] CONFIG [DISK...]
+USAGE: mbdump [OPTIONS] CONFIG [DISK...]
 
 OPTIONS:
 
