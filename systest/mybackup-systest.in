@@ -3,370 +3,365 @@
 
 set -eu
 
+ST_LOG_DOMAIN='mybackup-systest'
 
-BUILDDIR=`readlink -e '@abs_top_builddir@/systest'`
+. ./mybackup-systest-common
 
-ST_SRCDIR=`readlink -e '@abs_top_srcdir@'`
 
-ST_BUILDDIR="$BUILDDIR/st-build"
-ST_ROOTDIR="$BUILDDIR/st-root"
-ST_SAVEDIR="$BUILDDIR/st-save"
-ST_RUNBASEDIR="$BUILDDIR/st-run"
+# system conf
+#
+PACKAGE='@PACKAGE@'
+TOP_SRCDIR="`readlink -e '@abs_top_srcdir@'`"
+TOP_BUILDDIR="`readlink -e '@abs_top_builddir@'`"
+BUILDDIR="$TOP_BUILDDIR/systest"
 
 MB_SYSTEST_MODULES='@MB_SYSTEST_MODULES@'
-: ${ST_MODULES:=$MB_SYSTEST_MODULES}
+MB_SYSTEST_MODBASES="`echo $MB_SYSTEST_MODULES | sed -e 's,\(^\|[ \t]\)test_,\1,g'`"
+MB_SYSTEST_USER='mbst'
 
 
-# trace:
-_MYPID=$$
-DOMAIN="mybackup-systest"
-_log()
+# some defaults
+#
+# note: ST_ROOTDIR is a symlink
+# note: be carefull with BUILDDIR and ST_BUILDDIR!
+#
+: ${ST_DEBUG_MODULES:-}
+: ${ST_VERBOSE:=2}
+: ${ST_BASEDIR:=${BUILDDIR}/st-base}
+: ${ST_ROOTDIR:=/tmp/st-root}
+: ${ST_BUILDDIR:=${BUILDDIR}/st-build}
+
+# create a tmpdir
+TMPDIR=`mktemp -d /tmp/mybackup-systest.XXXXXX`
+trap "rm -rf $TMPDIR" EXIT
+
+
+# usage:
+#
+usage()
 {
-	# don't use getopt which can be fooled by weird messages
-	local n=0 c=0 l= msg=
-	while test $# -gt 0; do
-		case "$1" in
-			-*) local o="${1:1}"
-				while test x"$o" != x; do
-					case "${o:0:1}" in
-						c) c=1; o="${o:1}";;
-						n) n=1; o="${o:1}";;
-						l) l="${o:1}"; o="";
-							test x"$l" != x || {
-								l="$2"; shift; };;
-						*) die "invalid option: -$o";;
-					esac
-				done
-				;;
-			*) test x"$msg" = x && msg="${1}" || msg="${msg} ${1}";;
-		esac
-		shift
+	cat <<EOF
+USAGE: mybackup-systest [OPTIONS] [MODULE...]
+
+OPTIONS:
+
+  -d         always dump tests output
+  -v         be more verbose
+  -q         be less verbose
+  -g         enable debug messages (modules)
+  -G         enable debug messages (driver)
+  -h         print this message and exit
+  -h MODULE  get MODULE's help
+
+MODULES:
+
+`_modlist`
+
+ENVIRONMENT:
+
+  ST_MODULES=[MODULE...]  list of modules to run (overriden by
+                          command line)
+
+EOF
+}
+
+# _modinfo MODULE
+_modinfo()
+{
+	local e="/^[ \t]*#[ \t]*-*-/d;
+             /^[ \t]*$/d;
+             s,^[ \t]*#[^\-]*\-[ \t]*,,g;"
+	sed -e "$e" "$BUILDDIR/test_$1" | head -n1
+}
+
+_modlist()
+{
+	local m
+	for m in $MB_SYSTEST_MODBASES; do
+		local i="`_modinfo $m`"
+		printf " - %-10s : %s\n" "$m" "$i"
 	done
-	local fmt=
-	test $c -ne 0 || {
-		fmt="${fmt}${DOMAIN}:";
-		test x"$l" = x || fmt="${fmt}${l}:";
-		fmt="${fmt} "; }
-	fmt="${fmt}%s"
-	test $n -ne 0 || fmt="${fmt}\n"
-	printf "$fmt" "$msg"
-}
-trace() { test x"${DEBUG:-}" = x || _log -lDEBUG "${@}"; }
-info() { _log ${@}; }
-error() { _log -lERROR "${@}" >&2; }
-die() { _log -lFATAL "${@}" >&2; exit 1; }
-
-
-# isin ITEM LIST
-isin()
-{
-	local i="$1" i2; shift; local l="$@"
-	for i2 in $l; do
-		test x"$i" != x"$i2" || return 0
-	done
-	return 1
 }
 
 
-# center TEXT WIDTH [SEP]
-center()
+# usage_mod MODULE
+#
+usage_mod()
 {
-	local t="$1" w="$2" s="${3:- }" f=0
-	while test ${#t} -lt $w; do
-		test $f -eq 0 \
-			&& { t="${t}${s}"; f=1; } \
-			|| { t="${s}${t}"; f=0; }
-	done
-	echo "$t"
+	local mod="$1"
+	echo "MODULE '$mod'"
+	echo
+	( . ./"test_$1"; test_$1_help; )
 }
 
 
-# title TEXT WIDTH
-title()
+# fix_rootdir DEST
+#
+fix_rootdir()
 {
-	local s=`center '' $2 '*'`
-	local w2=`expr $2 - 4` || true
-	local t=`center "$1" $w2`
-	echo "$s"
-	echo "* $t *"
-	echo "$s"
-}
-
-
-# st_sync
-st_sync()
-{
-	local src="$1" dest="$2"
-	trace "sync: '$src' -> '$dest'"
-	test -d "$dest" || mkdir "$dest"
-	rsync -a --delete --delete-excluded "$src"/. "$dest" \
-		|| die "rsync failed"
+	local dest="`readlink -e $1`" \
+		|| test -d "$dest" \
+		|| die "fix_rootdir: bad dir: '$1'"
+	trace "set ST_ROOTDIR: '$dest'"
+	rm -f "$ST_ROOTDIR" "$BUILDDIR"/st-root
+	ln -sf "$dest" "$BUILDDIR"/st-root
+	test -e "$ST_ROOTDIR" || ln -sf "$dest" "$ST_ROOTDIR"
 }
 
 
 # main:
+#
 main()
 {
-	local mod errs=0 nruns=0 errlist=
-	global_setup
-	for mod in $ST_MODULES; do
-		nruns=`expr $nruns + 1`
-		info -n " - $mod ..."
-		if run_module "$mod"; then
-			info -c " OK"
+	# parse the command line
+	DUMP_OUTPUT=0
+	local help=0
+	local shortopts='dvqgGh'
+	local opts="`getopt -n mybackup-systest -o $shortopts -- ${@}`" || die
+	eval set -- "$opts"
+	while true; do
+		case "$1" in
+			-h) help=1; shift;;
+			-d) DUMP_OUTPUT=1; shift;;
+			-v) ST_VERBOSE=$((ST_VERBOSE+1)); shift;;
+			-q) ST_VERBOSE=$((ST_VERBOSE-1)); shift;;
+			-g) ST_DEBUG_MODULES=1; shift;;
+			-G) ST_DEBUG=1; shift;;
+			--) shift; break;;
+			*) die "opt: '$1'";;
+		esac
+	done
+	# help
+	if [ $help -ne 0 ]; then
+		if [ $# -eq 0 ]; then
+			usage
 		else
-			info -c " FAILED!"
-			errs=`expr $errs + 1`
-			errlist="$errlist $mod"
+			usage_mod "$1"
 		fi
-	done
-	local sep1=`for i in {1..70}; do echo -n '='; done`
-	local sep2=`for i in {1..70}; do echo -n '.'; done`
-	local r
-	info "$sep1"
-	if [ $errs -eq 0 ]; then
-		r=0
-		info "TEST RESULT: PASS ($nruns modules)"
+		exit 0
+	fi		
+	# select modules
+	if [ $# -eq 0 ]; then
+		: ${ST_MODULES:=${MB_SYSTEST_MODBASES}}
 	else
-		r=1
-		info "TEST RESULT: FAILED!! ($errs errors on $nruns modules)"
+		ST_MODULES="$@"
 	fi
+	ST_NMODULES=`len $ST_MODULES`
+	# go
+	run_suite
+}
+
+
+# run_suite
+#
+run_suite()
+{
+	trace "setup..."
+	setup || die
+	info "running $ST_NMODULES modules..."
+	local errlist= r=0
+	echo -n '['
 	for mod in $ST_MODULES; do
-		local mr=1; isin $mod $errlist || mr=0
-		if [ ${VERBOSE:-0} -ne 0 -o $mr -ne 0 ]; then
-			info "$sep1"
-			test $mr -eq 0 && info "SUCCESS: '$mod'" || info "FAILURE: '$mod'"
-			info "$sep2"
-			cat "$mod.log"
+		if run_module "$mod"; then
+			echo -n "."
+		else
+			echo -n "E"
+			errlist="$errlist $mod"
+			r=1
 		fi
 	done
-	info "$sep1"
+	echo ']'
+	# report
+	report "$ST_MODULES" "$errlist"
+	# ok
 	return $r
 }
 
 
-global_setup()
+# setup
+#
+setup()
 {
 	local oldpwd=`pwd`
-	trace "global setup"
-	local log="build.log"
-	# build the package
-	rm -rf "$ST_ROOTDIR"
-	test -d "$ST_BUILDDIR" || mkdir "$ST_BUILDDIR"
-	cd "$ST_BUILDDIR"
-	test -f Makefile || {
-		"$ST_SRCDIR"/configure --prefix "$ST_ROOTDIR" --exec-prefix "$ST_ROOTDIR"/usr >/dev/null \
-		|| die "configure failed"; }
-	make >/dev/null || die "make failed"
-	make install >/dev/null || die "make install failed"
-	# create some dirs
-	cd "$ST_ROOTDIR"
-	mkdir tmp
-	# save the rootdir
-	st_sync "$ST_ROOTDIR" "$ST_SAVEDIR"
+	logfile="$BUILDDIR"/setup.log
+	date >"$logfile"
+	_setup >>"$logfile" 2>&1 || {
+		error "setup failed";
+		cat "$logfile" >&2;
+		return 1; }
 	cd "$oldpwd"
 }
 
 
+# _setup
+#
+_setup()
+{
+	# reset base dir
+	rm -rf "$ST_BASEDIR"
+	mkdir "$ST_BASEDIR"
+	fix_rootdir "$ST_BASEDIR"
+	# create a build dir
+	test -d "$ST_BUILDDIR" || mkdir "$ST_BUILDDIR"
+	# update the configuration
+	if [ "$ST_BUILDDIR"/Makefile -nt "$BUILDDIR"/mybackup-systest.conf ]; then
+		trace "configuration up to date"
+	else
+		trace "updating configuration"
+		_setup_conf || return 1
+	fi
+	# build
+	_setup_build || return 1
+	# create /tmp
+	mkdir "$ST_ROOTDIR"/tmp
+	# ok
+	cd "$ST_ROOTDIR"
+	find -print0 | sort -z | xargs -0 ls -lhd >"$BUILDDIR"/setup.FILES
+	cd "$oldpwd"
+}
+
+
+# _setup_conf:
+#
+_setup_conf()
+{
+	# build the command line from user config
+	local cmd="\"$TOP_SRCDIR\"/configure"
+	local line
+	exec <"$BUILDDIR"/mybackup-systest.conf
+	while read line; do
+		echo "$line" | grep -v "^[ \t]*\(#\|$\)" >/dev/null \
+			|| continue
+		line="`eval echo $line`"
+		cmd="$cmd $line"
+	done
+	# run
+	cd "$ST_BUILDDIR"
+	trace "`pwd`> $cmd"
+	eval "$cmd" || {
+		error "configure failed";
+		return 1; }
+}
+
+
+# _setup_build:
+#
+_setup_build()
+{
+	cd "$ST_BUILDDIR"
+	fill -w70 -f'#' >>"$logfile"
+	make listvars || return 1
+	fill -w70 -f'#' >>"$logfile"
+	make || return 1
+	fill -w70 -f'#' >>"$logfile"
+	make install || return 1
+	fill -w70 -f'#' >>"$logfile"
+}
+
+
+# report
+#
+report()
+{
+	local runmods="$1" errmods="$2"
+	local nmods=`len $runmods` nerrs=`len $errmods`
+	local status
+	if [ $nerrs -eq 0 ]; then
+		status="PASS ($nmods MODULES(S) OK)"
+	else
+		status="FAILED! ($nerrs/$nmods MODULES(S) FAILED)"
+	fi
+	# report
+	local sep1="`fill -cw70 -f '#'`"
+	local sep2="`fill -cw70 -f '-'`"
+	echo "$sep1"
+	echo "TEST: $status"
+	for mod in $runmods; do
+		local mfailed mstatus
+		isin "$mod" $errmods \
+			&& { mstatus='FAILURE'; mfailed=1; } \
+			|| { mstatus='SUCCESS'; mfailed=0; }
+		test $DUMP_OUTPUT -ne 0 -o $mfailed -ne 0 \
+			|| continue
+		echo "$sep1"
+		echo "$mstatus: `strup $mod`"
+		echo "$sep2"
+		cat "test_$mod.log"
+	done
+	echo "$sep1"
+}
+
+
+# run_module MODULE
+#
 run_module()
 {
-	local mod="$1" log="$1.log" r=0
-	st_sync "$ST_SAVEDIR" "$ST_ROOTDIR"
-	( _run_module "$mod"; ) >"$log" 2>&1 || r=$?
-	st_sync "$ST_ROOTDIR" "$ST_ROOTDIR.$mod"
+	local mod="$1"
+	local logfile="test_$mod.log" r=0
+	local rundir="$BUILDDIR/st-root.$mod"
+	# create some temp dir
+	local tmpdir="$BUILDDIR/tmp/test_$mod"
+	test -d "$tmpdir" || mkdir -p "$tmpdir"
+	# sync the rootdir
+	st_sync "$ST_BASEDIR" "$rundir"
+	fix_rootdir "$rundir"
+	{ _run_commands "$mod" "`strup $mod`" || die "_run_command failed"; } \
+		| env -i @SHELL@ -s \
+		>"$logfile" 2>&1 || r=$?
 	return $r
 }
 
-_run_module()
+
+# _run_commands
+#
+_run_commands()
 {
-	local mod="$1"
+	cat <<EOF
+set -eu
 
-	# setup
-	DOMAIN="$mod"
-	ST_RUNDIR="$ST_RUNBASEDIR/$mod"
-	ST_ARG0="$BUILDDIR/$mod" # ?
-	ST_MBDUMP="$ST_ROOTDIR/usr/bin/mbdump"
-	test -d "$ST_RUNDIR" || mkdir -p "$ST_RUNDIR"
-	export PATH="$ST_ROOTDIR/usr/bin:/usr/bin:/bin"
-	export PYTHONPATH="$ST_ROOTDIR/usr/lib/python@PYTHON_VERSION@/site-packages"
+export ST_DEBUG="${ST_DEBUG_MODULES:-}"
+export ST_ROOTDIR="$ST_ROOTDIR"
+export ST_LOG_DOMAIN="test_$1"
+export ST_TEST_NAME="TEST_$2"
+export ST_TEST_FILE="$BUILDDIR/test_$1"
+export ST_TMPDIR="$BUILDDIR/tmp/test_$1"
+export ST_MBDUMP_OPTS="${ST_MBDUMP_OPTS:-}"
+export ST_MBCLEAN_OPTS="${ST_MBCLEAN_OPTS:-}"
 
-	cd "$ST_ROOTDIR"
-	. "$BUILDDIR/$mod" || die "source '$mod' failed"
-	cd "$ST_ROOTDIR"
-	eval "${mod}_setup" || die "setup '$mod' failed"
-	cd "$ST_ROOTDIR"
-	eval "${mod}_main" || die "main '$mod' failed"
-}
+# [fixme]
+export ST_MAILTO="${ST_MAILTO:-}"
+export GNUTAR="@GNUTAR@"
 
+#export HOME="\$ST_HOME\"
 
-# st_exec [EXPECTED-STATUS] COMMAND...
-st_exec()
-{
-	local expect=0
-	echo "${1:-}" | grep '^[!0-9]' >/dev/null \
-		&& { expect="$1"; shift; } || true
-	# build the command
-	test $# -gt 0 || die "st_exec: command missing"
-	cmd="\"$1\""; shift
-	while test $# -gt 0; do cmd="$cmd \"$1\""; shift; done
-	trace "> $cmd"
-	local r=0; eval "$cmd" || r=$?
-	# check the status
-	local inv=`echo "$expect" | cut -b1` exp
-	test x"$inv" = x"!" \
-		&& { inv=1; exp=`echo "$expect" | cut -b2-`; } \
-		|| { exp="$inv"; inv=0; }
-	: ${exp:=0}
-	#trace "r='$r' inv='$inv' exp='$exp'"
-	if test '(' $inv -eq 0 -a $r -eq $exp ')' -o '(' $inv -ne 0 -a $r -ne $exp ')'; then
-		trace "OK: '$r' ~= '$expect' [$cmd]"
-		return 0
-	else
-		error "unexpected command result: '$r' != '$expect'"
-		error "command was: $cmd"
-		die # ?
-		return 1
-	fi
-}
+cd "\$ST_ROOTDIR"
+. "$BUILDDIR"/mybackup-systest-common \
+  || die "could not load common tools"
 
-# st_mbdump
-st_mbdump()
-{
-	local expect=0
-	echo "${1:-}" | grep '^[!0-9]' >/dev/null \
-		&& { expect="$1"; shift; } || true
-	st_exec "$expect" mbdump ${MBDUMP_OPTS:-} "${@}"
-}
+#trace "loading tools"
+cd "\$ST_ROOTDIR"
+. "$BUILDDIR"/mybackup-systest-tools \
+  || die "could not load tools"
 
-# st_mbclean
-st_mbclean()
-{
-	local expect=0
-	echo "${1:-}" | grep '^[!0-9]' >/dev/null \
-		&& { expect="$1"; shift; } || true
-	st_exec "$expect" mbclean ${MBCLEAN_OPTS:-} "${@}"
-}
+trace "LOAD"
+cd "\$ST_ROOTDIR"
+. "\$ST_TEST_FILE" \
+  || die "could not load module"
 
+trace "SETUP"
+cd "\$ST_ROOTDIR"
+eval "test_$1_setup" \
+  || die "setup failed"
 
-# st_mkfile [-f] [-r ROOT] [-m MODE] [-d DATE] [-s size] FILENAME [-R|-|SOURCE]
-st_mkfile()
-{
-	local fname src= mode= root="$ST_ROOTDIR" date= force=0 rand=0 size=1
-	local opts=`getopt -o 'Rs:fr:d:m:' -- "${@}"` || die
-	eval set -- "$opts"
-	while true; do
-		case "$1" in
-			-R) rand=1; shift;;
-			-s) size="$2"; shift 2;;
-			-f) force=1; shift;;
-			-r) root="$2"; shift 2;;
-			-d) date="$2"; shift 2;;
-			-m) mode="$2"; shift 2;;
-			--) shift;
-				test $# -ge 1 && fname="$1" \
-					|| die "st_mkfile: filename required"
-				test $# -lt 2 || src="$2"
-				test $# -lt 3 || die "st_mkfile: too many args"
-				break;;
-			*) die "oups: $1"
-		esac
-	done
-	test x"${fname:0:1}" = x"/" \
-		|| die "st_mkfile: fname must be absolute ($fname)"
-	local dirname=`dirname "$fname"`
-	test x"$dirname" = x"/" || st_mkdir -r "$root" "$dirname"
-	local absname="${root}${fname}"
-	trace "creating file: '$fname' ($absname)"
-	test $force -ne 0 || set -C
-	:>"$absname" || die "could not create '$absname'"
-	set +C
-	if test $rand -ne 0; then
-		# [fixme] size
-		st_rand "$size" >"$absname"
-	elif test x"$src" = x; then
-		true
-	elif test x"$src" = x"-"; then
-		cat >"$absname"
-	else
-		cp "$src" "$absname"
-	fi
-	test x"$mode" = x || chmod "$mode" "$absname"
-	test x"$date" = x || touch -d "$date" "$absname"
-}
+trace "RUN"
+cd "\$ST_ROOTDIR"
+eval "test_$1_main" \
+  || die "run failed"
 
-# st_mkdir [-r ROOT] DIRNAME
-st_mkdir()
-{
-	local dname root="$ST_ROOTDIR" date=
-	local opts=`getopt -o 'r:' -- "${@}"` || die
-	eval set -- "$opts"
-	while true; do
-		case "$1" in
-			-r) root="$2"; shift 2;;
-			--) shift;
-				test $# -ge 1 && dname="$1" \
-					|| die "st_mkdir: dirname required"
-				test $# -lt 2 || die "st_mkdir: too many args"
-				break;;
-			*) die "oups: $1"
-		esac
-	done
-	test x"${dname:0:1}" = x"/" \
-		|| die "st_mkdir: dirname must be absolute ($dname)"
-	local parent=`dirname "$dname"`
-	test x"$parent" = x"/" || st_mkdir -r "$root" "$parent"
-	local absname="${root}${dname}"
-	test -d "$absname" || {
-		trace "creating directory: '$dname' ($absname)"
-		mkdir "$absname"; }
-	test x"$date" = x || touch -d "$date" "$absname"
-}
-
-st_rand()
-{
-	dd if=/dev/urandom bs=1M count=${1:-1} 2>/dev/null
-}
-
-# st_fakedate [-d DAYS] [-h HOURS] [-m MINS] [-r REF=YYYY/MM/DD HH:MM:SS]
-st_fakedate()
-{
-	local days=0 hours=0 mins=0 ref='1979/12/31 00:00:00'
-	local opts=`getopt -o 'd:h:m:r:' -- "${@}"`
-	eval set -- "$opts"
-	while true; do
-		case "$1" in
-			-d) days="$2"; shift 2;;
-			-h) hours="$2"; shift 2;;
-			-m) mins="$2"; shift 2;;
-			-r) ref="$2"; shift 2;;
-			--) break;;
-			*) die "? $1";;
-		esac
-	done
-	local stamp=`date -d "$ref" '+%s'` || die "invalid ref date: '$ref'"
-	stamp=`expr $stamp + $days '*' 86400 + $hours '*' 3600 + $mins '*' 60`
-	date -d "@$stamp" "+%Y/%m/%d %H:%M:%S"
-}
-
-
-# st_setup_fs REF-DATE ROOT NDAYS CALLBACK_PREFIX
-st_setup_fs()
-{
-	local oldpwd=`pwd` date="$1" root="$2" ndays="$3" callback="$4" day prev=
-	trace "creating fs in '$root' ($ndays days)"
-	for day in `seq 1 $ndays`; do
-		local daydate=`st_fakedate -r "$date" -d $day`
-		local dir="$root/day${day}"
-		test -d "$dir" || mkdir "$dir"
-		local cmd="${callback}${day} \"$daydate\""
-		test x"$prev" = x || st_sync "$prev" "$dir"
-		prev="$dir"
-		cd "$dir"
-		eval "$cmd" || die "st_setup_fs: callback failed"
-	done
-	trace "st_setup_fs: ok"
+trace "QUIT"
+EOF
 }
 
 
 # exec
-main ${@:-}
+main "${@}"

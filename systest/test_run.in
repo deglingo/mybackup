@@ -1,0 +1,74 @@
+# -*- shell-script -*-
+
+# test_run.in - try some full cycles in 'normal' circumstances
+
+
+# test_run_help:
+#
+test_run_help()
+{
+	cat <<EOF
+Try to run some full cycles in 'normal' circumstances.
+EOF
+}
+
+
+_fsday1()
+{
+	trace "DAY1: `pwd`"
+	st_mkfile -r. -d "$1" -Rs1M /D1/F1A
+	st_mkfile -r. -d "$1" -Rs1M /D1/F1B
+	st_mkfile -r. -d "$1" -Rs1M /D1/F1C
+	st_mkfile -r. -d "$1" -Rs1M /D2/F2A
+}
+
+_fsday2()
+{
+	trace "DAY2: `pwd`"
+}
+
+_fsday3()
+{
+	trace "DAY3: `pwd`"
+}
+
+
+# test_run_setup
+#
+test_run_setup()
+{
+	st_setup_fs 3
+
+	# create the config
+	st_mkfile "/etc/mybackup/$ST_TEST_NAME/mybackup.conf" - <<EOF
+{
+  "mailto": "${ST_MAILTO:-}",
+  "disks": {
+    "DISK_1": {
+      "path": "$ST_ROOTDIR/fs/D1",
+      "hooks": []
+    },
+    "DISK_2": {
+      "path": "$ST_ROOTDIR/fs/D2",
+      "hooks": []
+    }
+  }
+}
+EOF
+}
+
+
+# test_run_main
+#
+test_run_main()
+{
+	local day
+	for day in `seq 1 3`; do
+		st_switch_date -d$day
+		st_switch_fsday $day
+		st_mbdump "$ST_TEST_NAME"
+		# nothing should happen here
+		st_switch_date -d$day -h1
+		st_mbdump "$ST_TEST_NAME"
+	done
+}

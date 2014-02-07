@@ -1,12 +1,11 @@
 # -*- shell-script -*-
 
+# test_crash.in - try various ways to end a life
 
-DAY0='1979/12/31 00:00:00'
 
-
-_setup_day_1()
+_fsday1()
 {
-	st_mkfile -r . -d "$1" "/DISK_1/FILE" -Rs1
+	st_mkfile -r. -d "$1" "/DISK_1/FILE" -Rs1K
 }
 
 
@@ -15,12 +14,8 @@ _setup_day_1()
 test_crash_setup()
 {
 	# setup_fs
-	test "$ST_RUNDIR/fs.stamp-h" -nt "$ST_ARG0" || {
-		rm -rf "$ST_RUNDIR/fs";
-		mkdir "$ST_RUNDIR/fs";
-		st_setup_fs "$DAY0" "$ST_RUNDIR/fs" 1 _setup_day_;
-		date >"$ST_RUNDIR/fs.stamp-h"; }
-
+	st_setup_fs 1
+	# create the config
 	st_mkfile "/etc/mybackup/TESTCRASH/mybackup.conf" - <<EOF
 {
   "mailto": "${MYBACKUP_SYSTEST_MAILTO:-}",
@@ -66,46 +61,31 @@ EOF
 }
 
 
-getpid()
-{
-	# [fixme] how to that in bash ?
-    # ( echo $$; ) still returns the parent's pid !?
-	python -c 'import os; print os.getppid();'
-}
-
-
 # test_crash_main:
 #
 test_crash_main()
 {
-	local day=1 hour date
-	st_sync "$ST_RUNDIR/fs/day1" "$ST_ROOTDIR/fs"
-	# make sure mbclean succeeds in a clean env
-	st_mbclean TESTCRASH || die
+	st_switch_date -d1 -h1
+	st_switch_fsday 1
+	# first make sure mbclean succeeds in a clean env
+	st_mbclean TESTCRASH
 	# this one should work
-	hour=1; date="`st_fakedate -d$day -h$hour`"
-	trace "** RUN $hour : $date **"
-	_MB_SYSTEST_DATE="$date" \
-		st_mbdump -f TESTCRASH || die
+	st_switch_date -d1 -h2
+	st_mbdump -f TESTCRASH
 	# this must fail
-	hour=2; date="`st_fakedate -d$day -h$hour`"
-	trace "** RUN $hour : $date **"
-	_MB_SYSTEST_DATE="$date" \
-		MB_TEST_CRASH_TRIGGER='schedule' \
-		st_mbdump '!' -f -f TESTCRASH -q || die
+	st_switch_date -d1 -h3
+	st_exec '!' FOO='bar baz' MB_TEST_CRASH_TRIGGER='schedule' \
+		mbdump -f TESTCRASH
 	# make sure it won't run again (because the journal is still
 	# present)
-	hour=3; date="`st_fakedate -d$day -h$hour`"
-	trace "** RUN $hour : $date **"
-	_MB_SYSTEST_DATE="$date" \
-		st_mbdump '!' -f TESTCRASH -q || die
+	st_switch_date -d1 -h4
+	st_mbdump '!' -f TESTCRASH
 	# mbclean should clean up the mess
-	st_mbclean TESTCRASH || die
+	st_switch_date -d1 -h5
+	st_mbclean TESTCRASH
 	# so a new run will succeed
-	hour=4; date="`st_fakedate -d$day -h$hour`"
-	trace "** RUN $hour : $date **"
-	_MB_SYSTEST_DATE="$date" \
-		st_mbdump -f TESTCRASH || die
+	st_switch_date -d1 -h6
+	st_mbdump -f TESTCRASH
 	# all done
 	trace "OK"
 }

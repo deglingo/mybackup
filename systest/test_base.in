@@ -1,107 +1,59 @@
-#!@SHELL@
 # -*- shell-script -*-
+# test_base - sanity checks and basic stuff
 
 
-DAY0='1979/12/31 00:00:00'
-
-_setup_day_1()
+# test_base_help:
+#
+test_base_help()
 {
-	local date="$1" size="${TEST_MIRROR_FSIZE:-1}"
-	st_mkfile -r . -d "$date" -s "$size" "/DISK_1/FILE_1A" -R
-	st_mkfile -r . -d "$date" -s "$size" "/DISK_1/FILE_1B" -R
-	st_mkfile -r . -d "$date" -s "$size" "/DISK_1/FILE_1C" -R
-	st_mkfile -r . -d "$date" -s "$size" "/DISK_2/FILE_2A" -R
-	# ? touch -d "$date" "$dir/DISK_1" "$dir/DISK_2"
-}
-
-_setup_day_2()
-{
-	local date="$1" size="${TEST_MIRROR_FSIZE:-1}"
-	# don't touch 1A, modify 1B, delete 1C and create 1D
-	st_mkfile -f -r . -d "$date" "/DISK_1/FILE_1B" -R
-	rm DISK_1/FILE_1C
-	st_mkfile -r . -d "$date" "/DISK_1/FILE_1D" -R
-}
-
-_setup_day_3()
-{
-	local date="$1" size="${TEST_MIRROR_FSIZE:-1}"
-	# [todo]
+	cat <<EOF
+Performs some sanity checks on the install and report system details.
+EOF
 }
 
 
-# setup
+# test_base_setup:
 #
 test_base_setup()
 {
-	# setup_fs
-	test "$ST_RUNDIR/fs.stamp-h" -nt "$ST_ARG0" || {
-		rm -rf "$ST_RUNDIR/fs";
-		mkdir "$ST_RUNDIR/fs";
-		st_setup_fs "$DAY0" "$ST_RUNDIR/fs" 3 _setup_day_;
-		date >"$ST_RUNDIR/fs.stamp-h"; }
+	true
+}
 
-	st_mkfile "/etc/mybackup/TESTBASE/mybackup.conf" - <<EOF
+
+# _mbpy
+_mbpy()
 {
-  "mailto": "${MYBACKUP_SYSTEST_MAILTO:-}",
-  "scripts": {
-    "HOOK": {
-      "prog": "./HOOK",
-      "options": ["%(config)s", "%(disk)s", "%(orig)s", "%(path)s"]
-    }
-  },
-  "disks": {
-    "DISK_1": {
-      "orig": "$ST_ROOTDIR/orig/DISK_1",
-      "path": "$ST_ROOTDIR/fs/DISK_1",
-      "hooks": [{
-        "script": "HOOK",
-        "triggers": "schedule",
-        "options": ["extra", "args..."]
-      }]
-    },
-    "DISK_2": {
-      "orig": "",
-      "path": "$ST_ROOTDIR/fs/DISK_2",
-      "hooks": []
-    }
-  }
-}
-EOF
-
-	st_mkfile -m755 "/etc/mybackup/TESTBASE/HOOK" - <<EOF
-#!/bin/sh
-echo "HOOK: \$# ARGS:"
-for A in \$@; do
-  echo " - '\$A'"
-done
-echo "HOOK: ALL DONE!"
-EOF
+	"@PYTHON@" -c 'import mybackup; print(mybackup.__file__)'
 }
 
 
-# main
+# test_base_main:
 #
 test_base_main()
 {
-	trace "MBDUMP: `which mbdump`"
-	st_mbdump --help >"$ST_ROOTDIR/tmp/mbdump-help.txt"
-	st_mbclean --help >"$ST_ROOTDIR/tmp/mbclean-help.txt"
-	
-	# go
-	MBDUMP_OPTS='-v'
-	for day in `seq 1 3`; do
-		date=`st_fakedate -d$day -h1`
-		title "DAY $day" 70
-		st_sync "$ST_RUNDIR/fs/day$day" "$ST_ROOTDIR/fs"
-		_MB_SYSTEST_DATE="$date" st_mbdump TESTBASE
-		# just one time, make sure this does nothing
-		test $day -ne 1 || {
-			date=`st_fakedate -d$day -h2`;
-			_MB_SYSTEST_DATE="$date" st_mbdump TESTBASE; }
-		# also try the -f options
-		test $day -ne 1 || {
-			date=`st_fakedate -d$day -h2`;
-			_MB_SYSTEST_DATE="$date" st_mbdump -f TESTBASE; }
-	done
+	info "hello, I am '$ST_USER:$ST_GROUP' and I live in '$ST_HOME' with '$ST_SHELL'"
+	# check paths
+	local mbdump="`which mbdump`" || die "mbdump not found"
+	local mbclean="`which mbclean`" || die "mbclean not found"
+	local mbpy="`_mbpy`" || die "mybackup module not found"
+	test -x "$mbdump" \
+		|| die "mbdump is not executable: '$mbdump'"
+	test -x "$mbclean" \
+		|| die "mbclean is not executable: '$mbclean'"
+	test -f "$mbpy" || die "mybackup module not found: '$mbpy'"
+	# report
+	info "mbdump:   '$mbdump' (`readlink -e $mbdump`)"
+	info "mbclean:  '$mbclean' (`readlink -e $mbclean`)"
+	info "mbpy:     '$mbpy' (`readlink -e $mbpy`)"
+	# dump environment
+	info "`fill -lf'=' '== ENV ='`"
+	local l
+	env | sort | while read l; do info " $l"; done
+	info "`fill -f'='`"
+	# list files
+	cd "$ST_ROOTDIR"
+	info "`fill -lf'=' '== FILES ='`"
+	find -print0 | sort -z | xargs -0 ls -lhd
+	info "`fill -f'='`"
+	info "bye!"
 }

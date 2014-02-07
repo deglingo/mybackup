@@ -1,8 +1,117 @@
-# -*- shell-script -*-
+#!/bin/sh
 
-echo "autogen: bootstraping package..."
-touch ChangeLog # ?
-aclocal || exit 1
-automake --add-missing || exit 1
-autoconf || exit 1
-echo "autogen: all done!"
+# WARNING: ATUO-GENERATED FILE - DO NOT HAND EDIT!
+# (created by autogenize - 2014/02/07 13:32:17)
+
+set -eu
+
+# log funcs
+trace() { echo "autogen: $*"; }
+die() { echo "autogen:ERROR: $*" >&2; exit 1; }
+
+# read the config
+test -f autogen.conf || \
+	die "autogen.conf not found"
+. ./autogen.conf || die "errors in autogen.conf"
+
+CLEANFILES="
+ChangeLog
+COPYING
+INSTALL
+Makefile.in
+aclocal.m4
+configure
+install-sh
+missing
+autom4te.cache
+"
+
+# usage
+usage()
+{
+	cat <<EOF
+USAGE: sh ./autogen [OPTIONS] [help|boot|clean|list]
+
+Bootstrap or cleanup the package (extra arguments have the same
+meaning as the options).
+
+OPTIONS:
+
+  -b, --boot   bootstrap the package (default command)
+  -c, --clean  cleanup the bootstrap
+  -l, --list   list the files which will be deleted by clean
+  -h, --help   print this message and exit
+
+PACKAGE: $AG_PACKAGE $AG_VERSION
+EOF
+}
+
+# proc_boot
+proc_boot()
+{
+	trace "bootstraping package $AG_PACKAGE $AG_VERSION"
+	# [fixme]
+	echo "[TODO]" >ChangeLog
+	trace "aclocal..."
+	aclocal || die "aclocal failed"
+	trace "automake..."
+	automake --add-missing || die "automake failed"
+	trace "autoconf"
+	autoconf || die "autoconf failed"
+}
+
+# _find_cleanfiles COMMAND
+_find_cleanfiles()
+{
+	local usrcmd="$1"
+	local cmd="find '('"
+	local f o=
+	for f in $CLEANFILES; do
+		cmd="$cmd $o -name \"$f\""
+		o='-o'
+	done
+	cmd="$cmd ')' -print0 | sort -z | xargs -0 $usrcmd"
+	#echo "> $cmd" >&2
+	eval "$cmd"
+}
+
+# proc_clean
+proc_clean()
+{
+	trace "cleaning up package $AG_PACKAGE $AG_VERSION"
+	_find_cleanfiles "rm -rvf"
+}
+
+# proc_list
+proc_list()
+{
+	trace "the following files should be deleted:"
+	_find_cleanfiles "ls -ldh" | sed -e "s,\(.*\), - \1,g"
+}
+
+# parse command line
+SHORTOPTS='hbcl'
+LONGOPTS='help,boot,clean,list'
+CMD='boot'
+OPTS="`getopt -n autogen -o $SHORTOPTS -l $LONGOPTS -- ${@}`"
+eval set -- "$OPTS"
+while true; do
+	case "$1" in
+		-h|--help) CMD='help'; shift;;
+		-b|--boot) CMD='boot'; shift;;
+		-c|--clean) CMD='clean'; shift;;
+		-l|--list) CMD='list'; shift;;
+		--) shift; break;;
+		*) die "oups: '$1'";;
+	esac
+done
+test $# -le 1 || die "too many arguments (try sh ./autogen --help)"
+test $# -eq 0 || CMD="$1"
+case "$CMD" in
+	help) usage;;
+	boot) proc_boot;;
+	clean) proc_clean;;
+	list) proc_list;;
+	*) die "oups: '$CMD'"
+esac
+trace "all done!"

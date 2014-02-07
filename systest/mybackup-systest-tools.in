@@ -1,0 +1,255 @@
+# mybacup-systest-tools - helper tools used by the test modules only
+# -*- shell-script -*-
+
+set -eu
+
+export ST_USER="`id -un`"
+export ST_GROUP="`id -gn`"
+export ST_HOME="`getent passwd $ST_USER | cut -d: -f6`"
+export ST_SHELL="`getent passwd $ST_USER | cut -d: -f7`"
+
+export HOME="$ST_HOME"
+export PATH="$ST_ROOTDIR/usr/bin:/usr/bin:/bin"
+export PYTHONPATH="$ST_ROOTDIR/usr/lib/python@PYTHON_VERSION@/site-packages"
+
+: ${DAY0:='1079/12/31 00:00:00'}
+: ${ST_MBDUMP_OPTS:-}
+: ${ST_MBCLEAN_OPTS:-}
+
+
+# st_exec [!] [OPTIONS]
+#
+st_exec()
+{
+	local shouldfail=0 mark= cmd=
+	# check for the '!' mark
+	test x"${1:-}" != x"!" || {
+		shouldfail=1; mark='! '
+		shift; }
+	# check for NAME=VALUE params
+	while echo "${1:-}" | grep "=" >/dev/null; do
+		cmd="${cmd}`echo $1 | sed -e 's,=\(.*\)$,=\\\"\1\\\",g'` "
+		shift
+	done
+	local prog="$1"; shift
+	cmd="${cmd}\"${prog}\""
+	while [ $# -gt 0 ]; do
+		cmd="$cmd \"$1\""
+		shift
+	done
+	info "${mark}${cmd}"
+	local r=0; eval "$cmd" || r=$?
+	if [ $r -eq 0 ]; then
+		trace "cmd '$prog' : OK"
+		test $shouldfail -eq 0 || die "command did not fail: $cmd"
+	else
+		trace "cmd '$prog' : FAILED ($r)"
+		test $shouldfail -ne 0 || die "command failed: $cmd"
+	fi
+}
+
+st_mbdump() {
+	test x"${1:-}" = x"!" \
+		&& { shift; st_exec '!' mbdump ${ST_MBDUMP_OPTS} ${@}; } \
+		|| { st_exec mbdump ${ST_MBDUMP_OPTS} ${@}; }
+}
+
+st_mbclean() {
+	test x"${1:-}" = x"!" \
+		&& { shift; st_exec '!' mbclean ${ST_MBCLEAN_OPTS} ${@}; } \
+		|| { st_exec mbclean ${ST_MBCLEAN_OPTS} ${@}; }
+}
+
+
+# st_fakedate [-d DAYS] [-h HOURS] [-m MINS] [REF-DATE]
+#
+st_fakedate()
+{
+	local ref="$DAY0" days=0 hours=0 mins=0
+	local opts="`getopt -o 'd:h:m:' -- ${@}`"
+	eval set -- "$opts"
+	while true; do
+		case "$1" in
+			-d) days="$2"; shift 2;;
+			-h) hours="$2"; shift 2;;
+			-m) mins="$2"; shift 2;;
+			--) shift; test $# -eq 0 || ref="$@"; break;;
+			*) die "st_fakedate: oups: $1";;
+		esac
+	done
+	local stamp=`date -d "$ref" '+%s'`
+	stamp=$((stamp + days * 86400 + hours * 3600 + mins))
+	date -d "@$stamp"
+}
+
+
+# st_switch_date [-d DAYS] [-h HOURS] [-m MINS] [REF-DATE]
+#
+st_switch_date()
+{
+	local date="`st_fakedate ${@}`"
+	info "switching date: $date"
+	export _MB_SYSTEST_DATE="$date"
+}
+
+
+# st_setup_fs NDAYS
+#
+st_setup_fs()
+{
+	local oldpwd="`pwd`"
+	local ndays="$1"
+	local fsdir="$ST_TMPDIR/fs"
+	trace "creating fs for $ndays day(s) in '$fsdir'"
+	rm -rf "$fsdir"
+	mkdir "$fsdir"
+	local day func dir pfx='_fsday' last=
+	for day in `seq 1 $ndays`; do
+		func="${pfx}${day}"
+		dir="${fsdir}/day${day}"
+		mkdir "$dir"
+		test x"$last" = x || st_sync "$last" "$dir"
+		last="$dir"
+		local date="`st_fakedate -d$day`"
+		local stamp=`date -d "$date" '+%s'`
+		cd "$dir"
+		eval "$func \"$date\" $stamp"
+	done
+	cd "$oldpwd"
+}
+
+
+# st_switch_fsday DAY
+#
+st_switch_fsday()
+{
+	local day="$1"
+	st_sync "${ST_TMPDIR}/fs/day${day}" "$ST_ROOTDIR/fs"
+	info "fs switched to day $day"
+}
+
+
+# st_mkfile [OPTIONS] FILENAME [SOURCE]
+#
+# -f force overwrite
+# -r ROOT  set root dir (final name will be ${root}${FILENAME})
+# -m MODE  set file perms
+# -d DATE  set file's modification time
+# -s SIZE  set file size (accepts same units as dd)
+# -R       fill the file with random datas
+#
+# SOURCE   content source (`-' for stdin)
+#
+st_mkfile()
+{
+	local fname src= mode= root="$ST_ROOTDIR" date= force=0 rand=0 size=
+	local gto='getopt -s sh -n st_mkfile -o "Rs:fr:d:m:" -- "${@}"'
+	eval set -- "`eval $gto`"
+	while true; do
+		case "$1" in
+			-R) rand=1; shift;;
+			-s) size="$2"; shift 2;;
+			-f) force=1; shift;;
+			-r) root="$2"; shift 2;;
+			-d) date="$2"; shift 2;;
+			-m) mode="$2"; shift 2;;
+			--) shift;
+				test $# -ge 1 && fname="$1" \
+					|| die "st_mkfile: filename required"
+				test $# -lt 2 || src="$2"
+				test $# -lt 3 || die "st_mkfile: too many args: $@"
+				break;;
+			*) die "oups: $1"
+		esac
+	done
+	test x"`echo $fname | cut -c1`" = x"/" \
+		|| die "st_mkfile: fname must be absolute ($fname)"
+	local dirname=`dirname "$fname"`
+	test x"$dirname" = x"/" || st_mkdir -r "$root" "$dirname"
+	local absname="${root}${fname}"
+	trace "creating file: '$fname' ($absname)"
+	test $force -ne 0 || set -C
+	:>"$absname" || die "could not create '$absname'"
+	set +C
+	if test $rand -ne 0; then
+		# [fixme] size
+		st_rand "$size" >"$absname"
+	elif test x"$src" = x; then
+		true
+	elif test x"$src" = x"-"; then
+		cat >"$absname"
+	else
+		cp "$src" "$absname"
+	fi
+	test x"$mode" = x || chmod "$mode" "$absname"
+	test x"$date" = x || touch -d "$date" "$absname"
+}
+
+
+# st_mkdir [OPTIONS] DIRNAME
+#
+# -r ROOT
+#
+st_mkdir()
+{
+	local dname root="$ST_ROOTDIR" date=
+	local opts="`getopt -n st_mkdir -o 'r:' -- ${@}`" || die
+	eval set -- "$opts"
+	while true; do
+		case "$1" in
+			-r) root="$2"; shift 2;;
+			--) shift;
+				test $# -ge 1 && dname="$1" \
+					|| die "st_mkdir: dirname required"
+				test $# -lt 2 || die "st_mkdir: too many args"
+				break;;
+			*) die "oups: $1"
+		esac
+	done
+	test x"`echo $dirname | cut -c1`" = x"/" \
+		|| die "st_mkdir: dirname must be absolute ($dname)"
+	local parent=`dirname "$dname"`
+	test x"$parent" = x"/" || st_mkdir -r "$root" "$parent"
+	local absname="${root}${dname}"
+	test -d "$absname" || {
+		trace "creating directory: '$dname' ($absname)"
+		mkdir "$absname"; }
+	test x"$date" = x || touch -d "$date" "$absname"
+}
+
+
+# st_cut [SIZE=1M]
+#
+st_cut()
+{
+	dd bs="${1:-1M}" count=1 2>/dev/null
+}
+
+
+# st_rand [SIZE=1M]
+#
+st_rand()
+{
+	st_cut "$1" </dev/urandom
+}
+
+# st_fakedate [-d DAYS] [-h HOURS] [-m MINS] [-r REF=YYYY/MM/DD HH:MM:SS]
+st_fakedate()
+{
+	local days=0 hours=0 mins=0 ref='1979/12/31 00:00:00'
+	local opts="`getopt -o 'd:h:m:r:' -- ${@}`"
+	eval set -- "$opts"
+	while true; do
+		case "$1" in
+			-d) days="$2"; shift 2;;
+			-h) hours="$2"; shift 2;;
+			-m) mins="$2"; shift 2;;
+			-r) ref="$2"; shift 2;;
+			--) break;;
+			*) die "? $1";;
+		esac
+	done
+	local stamp=`date -d "$ref" '+%s'` || die "invalid ref date: '$ref'"
+	stamp=`expr $stamp + $days '*' 86400 + $hours '*' 3600 + $mins '*' 60`
+	date -d "@$stamp" "+%Y/%m/%d %H:%M:%S"
+}

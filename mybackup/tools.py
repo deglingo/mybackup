@@ -136,7 +136,7 @@ class DumperTar :
 
 
     # [FIXME]
-    GNUTAR = os.environ.get('GNUTAR', '/bin/false')
+    GNUTAR = os.environ['GNUTAR']
 
     
     # start:

@@ -10,6 +10,10 @@ AC_SUBST([pkglocalstatedir], '${localstatedir}/${PACKAGE}')
 AC_SUBST([vardir], '${localstatedir}')
 AC_SUBST([pkgvardir], '${pkglocalstatedir}')
 
+# [fixme]
+: ${GNUTAR:=/bin/false}
+AC_SUBST([GNUTAR], "$GNUTAR")
+
 AC_PROG_LN_S
 
 # [FIXME] couldn't use AM_PATH_PYTHON with py3
@@ -56,7 +60,7 @@ AC_SUBST([MB_MODULES_PY], "m4_map_args_w(mb_modules, [], [.py], [ ])")
 
 m4_define([mb_systest_modules], [ \
   test_base \
-  test_mirror \
+  test_run \
   test_crash \
 ])
 
@@ -77,5 +81,8 @@ AC_CONFIG_FILES([bin/mbclean], [chmod +x bin/mbclean])
 AC_CONFIG_FILES([bin/mbui], [chmod +x bin/mbui])
 AC_CONFIG_FILES([docs/examples/mirror])
 AC_CONFIG_FILES([systest/mybackup-systest], [chmod +x systest/mybackup-systest])
+AC_CONFIG_FILES([systest/mybackup-systest.conf])
+AC_CONFIG_FILES([systest/mybackup-systest-common])
+AC_CONFIG_FILES([systest/mybackup-systest-tools])
 AC_CONFIG_FILES(m4_map_args_w(mb_systest_modules, [systest/], [], [ ]))
 AC_OUTPUT

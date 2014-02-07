@@ -1,0 +1,90 @@
+# -*- shell-script -*-
+
+# mybackup-systest-common.in - basic tools used by the driver and
+#                              the modules
+
+
+: ${ST_LOG_DOMAIN:=<notset>}
+: ${ST_DEBUG:=}
+
+
+# log funcs:
+#
+trace() { test x"${ST_DEBUG:-}" = x || echo "$ST_LOG_DOMAIN:`pwd`> $*"; }
+info() { echo "$ST_LOG_DOMAIN:`pwd`> $*"; }
+die() { echo "$ST_LOG_DOMAIN:ERROR:`pwd`> $*" >&2; exit 1; }
+
+
+# fill [-w WIDTH] [-f FILLCHAR] [-l|-r|-c] TEXT...
+#
+fill()
+{
+	local s w=70 f=' ' j='c' r=0 r0=0 r1=1
+	local opts="`getopt -n center -o 'w:f:lrc' -- ${@}`" \
+		|| die "center: getopt failed"
+	eval set -- "$opts"
+	while true; do
+		case "$1" in
+			-w) w="$2"; shift 2;;
+			-f) f="$2"; shift 2;;
+			-l) j='l'; r=0; r0=0; r1=0; shift;;
+			-r) j='r'; r=1; r0=1; r1=1; shift;;
+			-c) j='c'; r=0; r0=0; r1=1; shift;;
+			--) shift; t="${*:-}"; break;;
+			*) die "center: oups: '$1'"
+		esac
+	done
+	# [fixme] is ${#s} portable ?
+	while [ ${#t} -lt $w ]; do
+		test $r -eq 0 \
+			&& { t="${t}${f}"; r=$r1; } \
+			|| { t="${f}${t}"; r=$r0; }
+	done
+	echo "$t"
+}
+
+
+# isin ITEM SEQ
+#
+# Tells wether 'ITEM' is in list 'SEQ'
+#
+isin()
+{
+	local i="$1"; shift
+	while [ $# -gt 0 ]; do
+		test x"$i" != x"$1" || return 0
+		shift
+	done
+	return 1
+}
+
+
+# len:
+#
+# Get the number of items in a list
+#
+len()
+{
+	echo $#
+}
+
+
+STRUP='ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+STRDN='abcdefghijklmnopqrstuvwxyz'
+
+
+# strup/down:
+#
+strup() { echo "$*" | sed -e "y/$STRDN/$STRUP/"; }
+strdn() { echo "$*" | sed -e "y/$STRUP/$STRDN/"; }
+
+
+# st_sync DIR1 DIR2
+#
+st_sync()
+{
+	local src="$1" dest="$2"
+	test -d "$2" || mkdir -p "$2"
+	trace "sync: '$src' -> '$dest'"
+	rsync -a --delete --delete-excluded "$src"/ "$dest"
+}

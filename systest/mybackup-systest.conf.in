@@ -1,0 +1,6 @@
+# mybackup-systest.conf - configure options for the systest env
+
+--prefix="$ST_ROOTDIR"
+--exec-prefix="$ST_ROOTDIR/usr"
+# [fixme] find a way to handle configure --pkglocalstatedir
+--localstatedir="$ST_ROOTDIR"
