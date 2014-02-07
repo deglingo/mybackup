@@ -197,7 +197,6 @@ class MBDumpApp (mbapp.MBAppBase) :
             error("this probably means that an earlier run failed, please run \`mbclean %s'" %
                   (self.config.cfgname))
             sys.exit(1)
-        warning("OUCH")
         self.journal.record('START', config=self.config.cfgname, runid=self.runid, hrs=self.config.start_hrs)
         self.journal.record('SELECT', disks=','.join(s.disk for s in sched))
         # schedule the dumps

@@ -99,16 +99,16 @@ class LogJournalHandler (LogBaseHandler) :
 
 
     def _notify (self, *args) :
-        assert 0, args
+        pass #assert 0, args
         
 
     # emit:
     #
     def emit (self, rec) :
         j = self.journal()
-        if not j.isopen() :
-            return
         if j is None :
+            return
+        if not j.isopen() :
             assert 0
         key = LogJournalHandler.KEYMAP[rec.levelno]
         j.record(key, message=rec.message)
@@ -267,14 +267,22 @@ class Journal :
 
     # __init__:
     #
+    # [FIXME] LOCKING IS WRONG!
+    #
     def __init__ (self, fname, mode, lockfile, skip_postproc=False) :
         self.lockfile = lockfile
         self.tlock = threading.Lock() # useless ?
         self.fname = fname
         self.mode = mode
         self.skip_postproc = skip_postproc
+        self.log_handler = None
         self.__open = False
         self.__doopen()
+
+
+    def __del__ (self) :
+        #sys.stderr.write("Journal.__del__(%s)\n" % self)
+        self.close()
 
 
     # __doopen:
@@ -291,19 +299,28 @@ class Journal :
                 fd = os.open(self.fname, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
                 os.close(fd)
             # captures all log errors and warnings
-            logger.addHandler(LogJournalHandler(self))
+            self.__install_log_handler()
         elif self.mode == 'a' :
             trace("opening journal '%s' for (append) writing" % self.fname)
             with self.flock :
                 self.__read_file()
             # captures all log errors and warnings
-            logger.addHandler(LogJournalHandler(self))
+            self.__install_log_handler()
         elif self.mode == 'r' :
             with self.flock :
                 self.__read_file()
             self.__open = False # ?
         else :
             assert 0, self.mode
+
+
+    # __install_log_handler:
+    #
+    def __install_log_handler (self) :
+        assert self.log_handler is None
+        self.log_handler = LogJournalHandler(self)
+        logger = logging.getLogger(log_domain())
+        logger.addHandler(self.log_handler)
 
 
     # isopen:
@@ -327,6 +344,10 @@ class Journal :
     def close (self) :
         with self.tlock :
             self.__open = False
+            if self.log_handler is not None :
+                logger = logging.getLogger(log_domain())
+                logger.removeHandler(self.log_handler)
+                self.log_handler = None
 
 
     # summary:
