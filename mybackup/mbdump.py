@@ -235,7 +235,8 @@ class MBDumpApp (mbapp.MBAppBase) :
                 if select is None or select.est > e.est :
                     select = e
             if select is None :
-                warning("%s: could not get estimates, full dump forced" % dsched.disk)
+                # [FIXME] should be a warning
+                trace("%s: could not get estimates, full dump forced" % dsched.disk)
                 dsched.update(prevrun=0)
             else :
                 info("%s: got best estimate: %s" % (dsched.disk, select))
