@@ -457,23 +457,6 @@ class Journal :
         os.rename(self.fname, dest)
 
 
-    # __update2:
-    #
-    def __update2 (self, key, kw) :
-        if key == '_OPEN' :
-            if self.curss is not None :
-                trace("journal: session was not closed: %s" % repr(self.curss[0]))
-            self.curss = [(key, copy.deepcopy(kw))]
-            self.state2.append(self.curss)
-        elif key == '_CLOSE' :
-            assert self.curss is not None
-            assert self.curss[0][1]['app'] == kw['app']
-            self.curss = None
-        else :
-            assert self.curss is not None
-            self.curss.append((key, kw))
-
-        
     # __update:
     #
     def __update (self, key, kw) :
@@ -540,6 +523,26 @@ class Journal :
             self.__record(key, **kwargs)
 
     def __record (self, key, **kwargs) :
+        entry = self.make_entry(key, kwargs)
+        # [removeme]
+        self.__oldrecord(key, kwargs)
+        #
+        if key == '_OPEN' :
+            if self.curss is not None :
+                trace("journal: session was not closed: %s" % repr(self.curss[0]))
+            self.curss = [entry]
+            self.state2.append(self.curss)
+        elif key == '_CLOSE' :
+            assert self.curss is not None
+            assert self.curss[0].app == entry.app
+            self.curss = None
+        else :
+            assert self.curss is not None
+            self.curss.append(entry)
+
+
+    # [removeme]
+    def __oldrecord (self, key, kwargs) :
         keyspec = Journal.KEYSPECS[key]
         assert len(kwargs) == len(keyspec), kwargs
         line = [key]
@@ -561,3 +564,15 @@ class Journal :
         f.flush()
         f.close()
         os.rename(tmp, self.fname)
+
+
+    # make_entry:
+    #
+    def make_entry (self, key, kwargs) :
+        kwargs = copy.deepcopy(kwargs) # [fixme] ?
+        kspec = Journal.KEYSPECS[key]
+        assert len(kspec) == len(kwargs), kwargs
+        ktype = Journal.KEYTYPES[key]
+        for pname, ptype in kspec :
+            kwargs[pname] = self.convert(ptype, kwargs[pname])
+        return ktype(**kwargs)
