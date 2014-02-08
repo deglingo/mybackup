@@ -5,6 +5,7 @@ __all__ = [
 ]
 
 import logging
+from collections import namedtuple
 
 from mybackup.base import *
 from mybackup.log import *
@@ -165,6 +166,11 @@ class Journal :
         'DUMP-FIX': (('disk', 'str'),
                      ('state', 'dumpstate')),
     }
+
+
+    KEYTYPES = dict((n, namedtuple('JournalKey_'+n.replace('-', '_'),
+                                   tuple(p[0] for p in kspecs)))
+                    for n, kspecs in KEYSPECS.items())
 
 
     flock = property(lambda s: FLock(s.lockfile))
@@ -471,7 +477,6 @@ class Journal :
     # __update:
     #
     def __update (self, key, kw) :
-        self.__update2(key, copy.deepcopy(kw))
         s = self.state
         # skip postproc messages
         if key != 'CLEAN-END' and self.skip_postproc and s.current_postproc is not None :
