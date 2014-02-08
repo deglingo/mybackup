@@ -96,11 +96,12 @@ class LogJournalHandler (LogBaseHandler) :
                                        logging.ERROR,
                                        logging.CRITICAL)))
         self.journal = weakref.ref(journal, self._notify)
+        self.frozen = False
 
 
     def _notify (self, *args) :
         pass #assert 0, args
-        
+
 
     # emit:
     #
@@ -300,6 +301,10 @@ class Journal :
         assert not self.isopen()
         self.state = JournalState()
         self.__open = True
+        # new style
+        self.state2 = []
+        self.curss = None
+        #
         if self.mode == 'w' :
             # [FIXME] !!
             trace("opening journal '%s' for writing" % self.fname)
@@ -446,9 +451,27 @@ class Journal :
         os.rename(self.fname, dest)
 
 
+    # __update2:
+    #
+    def __update2 (self, key, kw) :
+        if key == '_OPEN' :
+            if self.curss is not None :
+                trace("journal: session was not closed: %s" % repr(self.curss[0]))
+            self.curss = [(key, copy.deepcopy(kw))]
+            self.state2.append(self.curss)
+        elif key == '_CLOSE' :
+            assert self.curss is not None
+            assert self.curss[0][1]['app'] == kw['app']
+            self.curss = None
+        else :
+            assert self.curss is not None
+            self.curss.append((key, kw))
+
+        
     # __update:
     #
     def __update (self, key, kw) :
+        self.__update2(key, copy.deepcopy(kw))
         s = self.state
         # skip postproc messages
         if key != 'CLEAN-END' and self.skip_postproc and s.current_postproc is not None :
@@ -518,6 +541,7 @@ class Journal :
         for pname, ptype in keyspec :
             pval = Journal.convert(ptype, kwargs[pname])
             line.append(pval)
+        # the new session handler
         # update state
         self.__update(key, kwargs)
         # write
