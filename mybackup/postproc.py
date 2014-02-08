@@ -69,12 +69,14 @@ class PostProcess :
         
     # run:
     #
-    def run (self, config) :
+    def run (self, app_name, config) :
         self.panic_count = 0
         self.config = config
         self.db = mbdb.DB(self.config.dbfile)
         self.journal = journal.Journal(config.journalfile, 'a',
-                                       config.journallock, skip_postproc=True)
+                                       app_name=app_name,
+                                       lockfile=config.journallock,
+                                       skip_postproc=True)
         self.summary = self.journal.summary()
         self.journal.record('CLEAN-START', hrs=self.config.start_hrs)
         try:

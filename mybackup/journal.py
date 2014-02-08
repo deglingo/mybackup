@@ -120,6 +120,10 @@ class Journal :
 
 
     KEYSPECS = {
+        '_OPEN': (('app', 'str'),
+                  ('hrs', 'hrs'),
+                  ('mode', 'str')),
+                  
         'START':  (('config', 'str'),
                    ('runid',  'uint'),
                    ('hrs',    'hrs')),
@@ -269,11 +273,12 @@ class Journal :
     #
     # [FIXME] LOCKING IS WRONG!
     #
-    def __init__ (self, fname, mode, lockfile, skip_postproc=False) :
+    def __init__ (self, fname, mode, app_name, lockfile, skip_postproc=False) :
         self.lockfile = lockfile
         self.tlock = threading.Lock() # useless ?
         self.fname = fname
         self.mode = mode
+        self.app_name = app_name
         self.skip_postproc = skip_postproc
         self.log_handler = None
         self.__open = False
@@ -300,12 +305,15 @@ class Journal :
                 os.close(fd)
             # captures all log errors and warnings
             self.__install_log_handler()
+            # record open
+            self.record('_OPEN', app=self.app_name, hrs=stamp2hrs(int(time.time())), mode='w')
         elif self.mode == 'a' :
             trace("opening journal '%s' for (append) writing" % self.fname)
             with self.flock :
                 self.__read_file()
             # captures all log errors and warnings
             self.__install_log_handler()
+            self.record('_OPEN', app=self.app_name, hrs=stamp2hrs(int(time.time())), mode='a')
         elif self.mode == 'r' :
             with self.flock :
                 self.__read_file()
@@ -441,7 +449,9 @@ class Journal :
             # trace ?
             return
         # choose your key
-        if key == 'START' :
+        if key == '_OPEN' :
+            info("[TODO] JOURNAL OPEN: %s" % repr(kw))
+        elif key == 'START' :
             s.update(state='started',
                      config=kw['config'],
                      runid=kw['runid'],

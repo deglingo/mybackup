@@ -145,7 +145,7 @@ class MBDumpApp (mbapp.MBAppBase) :
         self.__process(sched)
         # cleanup
         pp = postproc.PostProcess()
-        pp.run(self.config)
+        pp.run('mbdump-clean', self.config)
         # ok
         info("all done, bye!")
 
@@ -191,6 +191,7 @@ class MBDumpApp (mbapp.MBAppBase) :
         # open the journal
         try:
             self.journal = Journal(self.config.journalfile, 'w',
+                                   app_name='mbdump', # [fixme]
                                    lockfile=self.config.journallock)
         except FileExistsError:
             error("could not open journal file: '%s'" % self.config.journalfile)
