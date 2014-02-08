@@ -123,6 +123,9 @@ class Journal :
         '_OPEN': (('app', 'str'),
                   ('hrs', 'hrs'),
                   ('mode', 'str')),
+
+        '_CLOSE': (('app', 'str'),
+                   ('hrs', 'hrs')),
                   
         'START':  (('config', 'str'),
                    ('runid',  'uint'),
@@ -350,6 +353,9 @@ class Journal :
     # close:
     #
     def close (self) :
+        # [FIXME] bad bad bad
+        if self.isopen() :
+            self.record('_CLOSE', app=self.app_name, hrs=stamp2hrs(int(time.time())))
         with self.tlock :
             self.__open = False
             if self.log_handler is not None :
@@ -451,6 +457,8 @@ class Journal :
         # choose your key
         if key == '_OPEN' :
             info("[TODO] JOURNAL OPEN: %s" % repr(kw))
+        elif key == '_CLOSE' :
+            info("[TODO] JOURNAL CLOSE: %s" % repr(kw))
         elif key == 'START' :
             s.update(state='started',
                      config=kw['config'],
