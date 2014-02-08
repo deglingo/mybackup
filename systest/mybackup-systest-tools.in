@@ -1,5 +1,5 @@
-# mybacup-systest-tools - helper tools used by the test modules only
 # -*- shell-script -*-
+# mybacup-systest-tools - helper tools used by the test modules only
 
 set -eu
 
@@ -97,6 +97,8 @@ st_switch_date()
 #
 st_setup_fs()
 {
+	test $ST_REBUILD_FS -ne 0 -o '!' -e "$ST_TMPDIR/fs.stamp-h" \
+		|| { trace "fs up to date"; return 0; }
 	local oldpwd="`pwd`"
 	local ndays="$1"
 	local fsdir="$ST_TMPDIR/fs"
@@ -115,6 +117,7 @@ st_setup_fs()
 		cd "$dir"
 		eval "$func \"$date\" $stamp"
 	done
+	date >"$ST_TMPDIR/fs.stamp-h"
 	cd "$oldpwd"
 }
 

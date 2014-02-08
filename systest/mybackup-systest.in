@@ -46,6 +46,7 @@ USAGE: mybackup-systest [OPTIONS] [MODULE...]
 OPTIONS:
 
   -d         always dump tests output
+  -F         force rebuild fs directories
   -v         be more verbose
   -q         be less verbose
   -g         enable debug messages (modules)
@@ -115,14 +116,16 @@ main()
 {
 	# parse the command line
 	DUMP_OUTPUT=0
+	: ${ST_REBUILD_FS:=0}
 	local help=0
-	local shortopts='dvqgGh'
+	local shortopts='dFvqgGh'
 	local opts="`getopt -n mybackup-systest -o $shortopts -- ${@}`" || die
 	eval set -- "$opts"
 	while true; do
 		case "$1" in
 			-h) help=1; shift;;
 			-d) DUMP_OUTPUT=1; shift;;
+			-F) ST_REBUILD_FS=1; shift;;
 			-v) ST_VERBOSE=$((ST_VERBOSE+1)); shift;;
 			-q) ST_VERBOSE=$((ST_VERBOSE-1)); shift;;
 			-g) ST_DEBUG_MODULES=1; shift;;
@@ -300,6 +303,7 @@ run_module()
 	local logfile="test_$mod.log" r=0
 	local rundir="$BUILDDIR/st-root.$mod"
 	# create some temp dir
+	# note: this one is kept between runs!
 	local tmpdir="$BUILDDIR/tmp/test_$mod"
 	test -d "$tmpdir" || mkdir -p "$tmpdir"
 	# sync the rootdir
@@ -327,6 +331,7 @@ export ST_TEST_FILE="$BUILDDIR/test_$1"
 export ST_TMPDIR="$BUILDDIR/tmp/test_$1"
 export ST_MBDUMP_OPTS="${ST_MBDUMP_OPTS:-}"
 export ST_MBCLEAN_OPTS="${ST_MBCLEAN_OPTS:-}"
+export ST_REBUILD_FS="${ST_REBUILD_FS}"
 
 # [fixme]
 export ST_MAILTO="${ST_MAILTO:-}"
