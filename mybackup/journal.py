@@ -527,7 +527,7 @@ class Journal :
             s.current_postproc.update(endhrs=kw['hrs'])
             s.current_postproc = None
         elif key == 'DUMP-FIX' :
-            assert s.current_postproc is not None
+            pass # ? assert s.current_postproc is not None
         else :
             assert 0, (key, kw)
         # trace("JOURNAL UPDATE: %s\n%s" %
@@ -593,10 +593,10 @@ class Journal :
     # make_entry:
     #
     def make_entry (self, key, kwargs) :
-        kwargs = copy.deepcopy(kwargs) # [fixme] ?
+        #kwargs = copy.deepcopy(kwargs) # [fixme] ?
         kspec = Journal.KEYSPECS[key]
         assert len(kspec) == len(kwargs), kwargs
         ktype = Journal.KEYTYPES[key]
         for pname, ptype in kspec :
-            kwargs[pname] = self.convert(ptype, kwargs[pname])
+            self.convert(ptype, kwargs[pname]) # [fixme] just to check validity
         return ktype(key=key, **kwargs)

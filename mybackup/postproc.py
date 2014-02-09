@@ -39,9 +39,11 @@ class JDumpInfo (_JDumpInfo) :
         _JDumpInfo.__init__(self,
                             disk=disk,
                             state='selected',
+                            fname='',
                             prevrun=-1,
                             raw_size=-1,
-                            comp_size=-1)
+                            comp_size=-1,
+                            nfiles=-1)
     
 
 # JState:
@@ -151,7 +153,7 @@ class PostProcess :
     # __fix_dump:
     #
     def __fix_dump (self, disk, state=None) :
-        dump = self.summary.dumps[disk]
+        dump = self.runinfo.dumps[disk]
         kw = {'disk': disk}
         if state is None :
             kw['state'] = None
@@ -175,15 +177,12 @@ class PostProcess :
                                        tool_name='clean',
                                        lockfile=config.journallock,
                                        skip_postproc=True)
-        info("[TODO] analysis: %s" % repr(self.analysis(self.journal.get_state())))
-        self.summary = self.journal.summary()
-        self.journal.record('CLEAN-START', hrs=self.config.start_hrs)
+        self.runinfo = self.analysis(self.journal.get_state())
         try:
             self.__run()
         except Exception as exc:
             self.panic("unhandled exception: %s: %s" %
                        (exc.__class__.__name__, exc))
-        self.journal.record('CLEAN-END', hrs=self.config.start_hrs)
         self.journal.close()
         # [fixme] should not be here - send a report (from a fresh
         # journal)
@@ -198,14 +197,15 @@ class PostProcess :
         if self.panic_count > 0 :
             raise PostProcPanic()
         # and roll the journal
-        self.journal.roll(dirname=self.config.journaldir, hrs=self.summary.hrs)
+        self.journal.roll(dirname=self.config.journaldir, hrs=self.runinfo.start_hrs)
 
 
     # __run:
     #
     def __run (self) :
+        trace("post-processing: %s" % repr(self.runinfo))
         # process dumps
-        for disk, dump in self.summary.dumps.items() :
+        for disk, dump in self.runinfo.dumps.items() :
             try:
                 self.__process_dump(disk, dump)
             except Exception as exc:
@@ -215,21 +215,28 @@ class PostProcess :
 
     # __process_dump:
     #
+    # IF NOT RECORDED THEN
+    #   1. discard and report empty dumps -> stop
+    #   2. check the partfile and fix the state
+    #   3. record
+    # ENDIF
+    # 4. move
+    #
     def __process_dump (self, disk, dump) :
         # check if we already have a record
-        rec = self.db.select_dump(runid=self.summary.runid, disk=disk)
+        rec = self.db.select_dump(runid=self.runinfo.runid, disk=disk)
         if rec is None :
             trace("%s: dump not registered, processing" % disk)
             self.__check_dump(disk, dump)
             # record the dump
-            destbase = self.config.disks[disk].get_dumpname(runid=self.summary.runid,
-                                                            hrs=self.summary.hrs,
+            destbase = self.config.disks[disk].get_dumpname(runid=self.runinfo.runid,
+                                                            hrs=self.runinfo.start_hrs,
                                                             level=0, # [TODO]
                                                             prevrun=dump.prevrun,
                                                             state=dump.state)
             destext = self.config.disks[disk].get_dumpext()
             try:
-                rec = self.db.record_dump(runid=self.summary.runid, disk=disk, state=dump.state,
+                rec = self.db.record_dump(runid=self.runinfo.runid, disk=disk, state=dump.state,
                                           prevrun=dump.prevrun, fname=destbase+destext,
                                           raw_size=dump.raw_size, comp_size=dump.comp_size,
                                           nfiles=dump.nfiles)
@@ -286,6 +293,7 @@ class PostProcess :
     # __check_dump_sanity:
     #
     def __check_dump_sanity (self, disk, dump, partfile, st) :
+        warning("dump comp size: '%s' (%s)" % (dump.comp_size, dump.comp_size.__class__))
         # now we know that the dump exists
         assert DumpState.cmp(dump.state, 'ok', 'partial', 'failed'), \
           DumpState.tostr(dump.state)
@@ -321,6 +329,7 @@ class PostProcess :
                            (disk, partfile, destfile))
                 return
             trace("%s: move already done" % disk)
+            # maybe recheck destfile size ?
             return
         # just in case, make sure we don't clobber an existing file -
         # [FIXME] a race condition can leave an empty destfile behind
@@ -340,7 +349,7 @@ class PostProcess :
                 self.panic("%s: partial and final dump both exist! (%s -> %s)" %
                            (disk, partfile, destfile))
                 return
-        if fd != 0 :
+        else:
             os.close(fd)
         # now we can do it
         trace("%s: rename('%s', '%s')" % (disk, partfile, destfile))
