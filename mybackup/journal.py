@@ -122,11 +122,11 @@ class Journal :
 
 
     KEYSPECS = {
-        '_OPEN': (('app', 'str'),
+        '_OPEN': (('tool', 'str'),
                   ('hrs', 'hrs'),
                   ('mode', 'str')),
 
-        '_CLOSE': (('app', 'str'),
+        '_CLOSE': (('tool', 'str'),
                    ('hrs', 'hrs')),
                   
         'START':  (('config', 'str'),
@@ -169,7 +169,7 @@ class Journal :
 
 
     KEYTYPES = dict((n, namedtuple('JournalKey_'+n.replace('-', '_'),
-                                   tuple(p[0] for p in kspecs)))
+                                   ('key',) + tuple(p[0] for p in kspecs)))
                     for n, kspecs in KEYSPECS.items())
 
 
@@ -283,12 +283,12 @@ class Journal :
     #
     # [FIXME] LOCKING IS WRONG!
     #
-    def __init__ (self, fname, mode, app_name, lockfile, skip_postproc=False) :
+    def __init__ (self, fname, mode, tool_name, lockfile, skip_postproc=False) :
         self.lockfile = lockfile
         self.tlock = threading.Lock() # useless ?
         self.fname = fname
         self.mode = mode
-        self.app_name = app_name
+        self.tool_name = tool_name
         self.skip_postproc = skip_postproc
         self.log_handler = None
         self.__open = False
@@ -320,14 +320,14 @@ class Journal :
             # captures all log errors and warnings
             self.__install_log_handler()
             # record open
-            self.record('_OPEN', app=self.app_name, hrs=stamp2hrs(int(time.time())), mode='w')
+            self.record('_OPEN', tool=self.tool_name, hrs=stamp2hrs(int(time.time())), mode='w')
         elif self.mode == 'a' :
             trace("opening journal '%s' for (append) writing" % self.fname)
             with self.flock :
                 self.__read_file()
             # captures all log errors and warnings
             self.__install_log_handler()
-            self.record('_OPEN', app=self.app_name, hrs=stamp2hrs(int(time.time())), mode='a')
+            self.record('_OPEN', tool=self.tool_name, hrs=stamp2hrs(int(time.time())), mode='a')
         elif self.mode == 'r' :
             with self.flock :
                 self.__read_file()
@@ -343,6 +343,13 @@ class Journal :
         self.log_handler = LogJournalHandler(self)
         logger = logging.getLogger(log_domain())
         logger.addHandler(self.log_handler)
+
+
+    # get_state:
+    #
+    def get_state (self) :
+        with self.tlock :
+            return self.state2[:]
 
 
     # isopen:
@@ -366,7 +373,7 @@ class Journal :
     def close (self) :
         # [FIXME] bad bad bad
         if self.isopen() :
-            self.record('_CLOSE', app=self.app_name, hrs=stamp2hrs(int(time.time())))
+            self.record('_CLOSE', tool=self.tool_name, hrs=stamp2hrs(int(time.time())))
         with self.tlock :
             self.__open = False
             if self.log_handler is not None :
@@ -414,15 +421,14 @@ class Journal :
             if not line : continue
             try:
                 self.__read_line(line)
+                self.__read_line2(line)
             except Exception:
                 exception("%s:%d: invalid journal line: '%s'" %
                           (fname, lno+1, line))
                 continue
 
     def __read_line (self, line) :
-        trace("<< `%s'" % line)
         argv = line.split(':')
-        trace(">> %s" % ', '.join("`%s'" % w for w in argv))
         key = argv.pop(0)
         kspecs = Journal.KEYSPECS[key]
         assert len(argv) == len(kspecs), (key, argv)
@@ -430,6 +436,20 @@ class Journal :
         for i, (pname, ptype) in enumerate(kspecs) :
             kwargs[pname] = self.adapt(ptype, argv[i])
         self.__update(key, kwargs)
+
+    def __read_line2 (self, line) :
+        trace("<< `%s'" % line)
+        argv = line.split(':')
+        key = argv.pop(0)
+        kspec = Journal.KEYSPECS[key]
+        assert len(argv) == len(kspec), (key, argv)
+        kw = {}
+        for i, (pname, ptype) in enumerate(kspec) :
+            kw[pname] = self.adapt(ptype, argv[i])
+        entry = self.make_entry(key, kw)
+        self.__update2(entry)
+        
+        trace(">> %s" % ', '.join("`%s'" % w for w in argv))
 
 
     # __roll:
@@ -524,21 +544,25 @@ class Journal :
 
     def __record (self, key, **kwargs) :
         entry = self.make_entry(key, kwargs)
+        self.__update2(entry)
         # [removeme]
         self.__oldrecord(key, kwargs)
         #
-        if key == '_OPEN' :
-            if self.curss is not None :
-                trace("journal: session was not closed: %s" % repr(self.curss[0]))
-            self.curss = [entry]
-            self.state2.append(self.curss)
-        elif key == '_CLOSE' :
-            assert self.curss is not None
-            assert self.curss[0].app == entry.app
-            self.curss = None
-        else :
-            assert self.curss is not None
-            self.curss.append(entry)
+
+    def __update2 (self, entry) :
+        with self.tlock :
+            if entry.key == '_OPEN' :
+                if self.curss is not None :
+                    trace("journal: session was not closed: %s" % repr(self.curss[0]))
+                self.curss = [entry]
+                self.state2.append(self.curss)
+            elif entry.key == '_CLOSE' :
+                assert self.curss is not None
+                assert self.curss[0].tool == entry.tool
+                self.curss = None
+            else :
+                assert self.curss is not None
+                self.curss.append(entry)
 
 
     # [removeme]
@@ -575,4 +599,4 @@ class Journal :
         ktype = Journal.KEYTYPES[key]
         for pname, ptype in kspec :
             kwargs[pname] = self.convert(ptype, kwargs[pname])
-        return ktype(**kwargs)
+        return ktype(key=key, **kwargs)

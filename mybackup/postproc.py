@@ -20,9 +20,107 @@ class PostProcPanic (Exception) :
     pass
 
 
+_JRunInfo = attrdict('_JRunInfo')
+_JDumpInfo = attrdict('_JDumpInfo')
+
+class JRunInfo (_JRunInfo) :
+
+    def __init__ (self) :
+        _JRunInfo.__init__(self,
+                           config='X',
+                           start_hrs='X',
+                           end_hrs='X',
+                           runid=0,
+                           dumps={})
+
+class JDumpInfo (_JDumpInfo) :
+
+    def __init__ (self, disk) :
+        _JDumpInfo.__init__(self,
+                            disk=disk,
+                            state='selected',
+                            prevrun=-1,
+                            raw_size=-1,
+                            comp_size=-1)
+    
+
+# JState:
+#
+class JState :
+
+
+    # analysis:
+    #
+    @staticmethod
+    def analysis (state) :
+        runinfo = JRunInfo()
+        for session in state :
+            op = session[0]
+            assert op.key == '_OPEN', op
+            if op.tool == 'dump' :
+                JState._analysis_dump(runinfo, session)
+            else :
+                assert 0, op
+        return runinfo
+
+    @staticmethod
+    def _analysis_dump (runinfo, ss) :
+        for ent in ss[1:] :
+            if ent.key == 'START' :
+                assert runinfo.start_hrs == 'X'
+                runinfo.update(config=ent.config, start_hrs=ent.hrs, runid=ent.runid)
+            elif ent.key == 'SELECT' :
+                runinfo.dumps = dict((n, JDumpInfo(disk=n))
+                                     for n in ent.disks.split(','))
+            elif ent.key == 'SCHEDULE' :
+                assert runinfo.dumps[ent.disk].state == 'selected'
+                runinfo.dumps[ent.disk].update(state='scheduled', prevrun=ent.prevrun)
+            elif ent.key == 'DUMP-START' :
+                assert runinfo.dumps[ent.disk].state == 'scheduled'
+                runinfo.dumps[ent.disk].update(state='partial', fname=ent.fname)
+            elif ent.key == 'DUMP-FINISHED' :
+                assert runinfo.dumps[ent.disk].state == 'partial'
+                runinfo.dumps[ent.disk].update(state=DumpState.tostr(ent.state),
+                                               raw_size=ent.raw_size,
+                                               comp_size=ent.comp_size,
+                                               nfiles=ent.nfiles)
+            elif ent.key == 'END' :
+                assert runinfo.end_hrs == 'X'
+                runinfo.update(end_hrs=ent.hrs)
+            else :
+                assert 0, ent
+
 # PostProcess:
 #
 class PostProcess :
+
+
+    # analysis:
+    #
+    # [FIXME] should be elsewhere
+    #
+    def analysis (self, state) :
+        ssdump = None
+        ssclean = None
+        # filter
+        for ss in state :
+            op = ss[0]
+            assert op.key == '_OPEN', op
+            if op.tool == 'dump' :
+                assert ssdump is None
+                ssdump = ss
+            elif op.tool == 'clean' :
+                ssclean = ss
+            else :
+                assert 0, ss
+
+        trace("analysing dump:\n%s" % '\n'.join(repr(s) for s in ssdump))
+        if ssclean is None :
+            trace("no last clean found")
+        else :
+            trace("found last clean state:\n%s" % '\n'.join(repr(s) for s in ssclean))
+
+        return JState.analysis([ssdump])
 
 
     @staticmethod
@@ -69,14 +167,15 @@ class PostProcess :
         
     # run:
     #
-    def run (self, app_name, config) :
+    def run (self, config) :
         self.panic_count = 0
         self.config = config
         self.db = mbdb.DB(self.config.dbfile)
         self.journal = journal.Journal(config.journalfile, 'a',
-                                       app_name=app_name,
+                                       tool_name='clean',
                                        lockfile=config.journallock,
                                        skip_postproc=True)
+        info("[TODO] analysis: %s" % repr(self.analysis(self.journal.get_state())))
         self.summary = self.journal.summary()
         self.journal.record('CLEAN-START', hrs=self.config.start_hrs)
         try:
