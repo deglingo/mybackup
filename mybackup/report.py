@@ -8,6 +8,7 @@ import copy
 
 from mybackup.sysconf import SYSCONF
 from mybackup.base import *
+from mybackup.log import *
 from mybackup.asciitable import Table, Frame, Justify
 
 
@@ -16,7 +17,7 @@ from mybackup.asciitable import Table, Frame, Justify
 class Report :
 
 
-    ndumps = property(lambda s: len(s.summary.dumps))
+    ndumps = property(lambda s: len(s.runinfo.dumps))
     nerrors = property(lambda s: len(s.errors))
     nwarnings = property(lambda s: len(s.warnings))
     nstranges = property(lambda s: len(s.stranges))
@@ -25,11 +26,11 @@ class Report :
     
     # __init__:
     #
-    def __init__ (self, config, summary, running=False, width=70) :
+    def __init__ (self, config, runinfo, running=False, width=70) :
         self.width = width
-        # NOTE: only use config for infos which are not in summary!
+        # NOTE: only use config for infos which are not in runinfo!
         self.config = config
-        self.summary = summary
+        self.runinfo = runinfo
         self.running = running
         self.__report_prep()
         self.__report_title()
@@ -47,32 +48,32 @@ class Report :
     #
     def __report_prep (self) :
         self.pre_errors = []
-        self.errors = copy.deepcopy(self.summary.errors)
-        self.warnings = copy.deepcopy(self.summary.warnings)
-        self.stranges = copy.deepcopy(self.summary.stranges)
-        self.notes = copy.deepcopy(self.summary.notes)
+        self.errors = copy.deepcopy(self.runinfo.errors)
+        self.warnings = copy.deepcopy(self.runinfo.warnings)
+        self.stranges = copy.deepcopy(self.runinfo.stranges)
+        self.notes = copy.deepcopy(self.runinfo.notes)
         # check if we started at all
-        if self.summary.hrs == 'X' :
+        if self.runinfo.start_hrs == 'X' :
             self.maybe_error("this run did not start!?")
-        if self.summary.endhrs == 'X' :
+        if self.runinfo.end_hrs == 'X' :
             self.maybe_error("this run did not finish properly!")
         # check if all dumps are ok
-        if self.summary.dumps :
-            failed = [d for d in self.summary.dumps.values()
+        if self.runinfo.dumps :
+            failed = [d for d in self.runinfo.dumps.values()
                       if not DumpState.cmp(d.state, 'ok')]
             if failed :
                 self.maybe_error("%s did not finished properly!"
                                  % plural(len(failed), 'dump'))
         else :
             self.maybe_error("no dump found")
-        # check if cleaning has been done
-        if not self.summary.postprocs :
-            self.maybe_error("no post-processing done")
-        else :
-            # [fixme] check and report previous ones too ?
-            pp = self.summary.postprocs[-1]
-            if pp.endhrs == 'X' :
-                self.maybe_error("the last post-processing did not finish!")
+        # [fixme] check if cleaning has been done
+        # if not self.summary.postprocs :
+        #     self.maybe_error("no post-processing done")
+        # else :
+        #     # [fixme] check and report previous ones too ?
+        #     pp = self.summary.postprocs[-1]
+        #     if pp.endhrs == 'X' :
+        #         self.maybe_error("the last post-processing did not finish!")
         # format the 'error mark'
         self.errmark = ''
         self.errmark += ('!' if (self.errors or self.pre_errors) else '-')
@@ -86,8 +87,8 @@ class Report :
         fmt = "%(package)s '%(config)s' REPORT [%(errmark)s] %(date)s"
         args = {'errmark': self.errmark,
                 'package': SYSCONF['PACKAGE'].upper(),
-                'config': self.summary.config,
-                'date': hrs2date(self.summary.hrs)}
+                'config': self.runinfo.config,
+                'date': hrs2date(self.runinfo.start_hrs)}
         self.title = fmt % args
 
 
@@ -105,9 +106,9 @@ class Report :
     def __report_header (self) :
         lines = []
         # head line
-        headline = "%s/%04d - %s - %s" % (self.summary.config,
-                                          self.summary.runid,
-                                          hrs2date(self.summary.hrs),
+        headline = "%s/%04d - %s - %s" % (self.runinfo.config,
+                                          self.runinfo.runid,
+                                          hrs2date(self.runinfo.start_hrs),
                                           plural(self.ndumps, 'DUMP'))
         lines.append(headline.center(self.width))
         lines.append('')
@@ -154,9 +155,9 @@ class Report :
         # parse column specs (title, format, args)
         cspecs = self.__parse_columns(self.config.report_columns)
         # big title
-        big_title = "%s/%04d - %s" % (self.summary.config,
-                                      self.summary.runid,
-                                      hrs2date(self.summary.hrs))
+        big_title = "%s/%04d - %s" % (self.runinfo.config,
+                                      self.runinfo.runid,
+                                      hrs2date(self.runinfo.start_hrs))
         table.add(big_title, 0, 0, 1, len(cspecs), frame=Frame.BOX,
                   justify=Justify.CENTER)
         # columns titles
@@ -164,16 +165,25 @@ class Report :
             table.add(col[0], 1, c, frame=Frame.BOX, justify=Justify.CENTER)
         # columns content
         t_state, t_raw, t_comp, t_files = DumpState.OK, 0, 0, 0
-        ndumps = len(self.summary.dumps)
+        ndumps = len(self.runinfo.dumps)
         last = ndumps - 1
-        for r, dump in enumerate(self.summary.dumps.values()) :
+        for r, dump in enumerate(self.runinfo.dumps.values()) :
             if not DumpState.cmp(dump.state, 'ok') :
                 t_state = DumpState.FAILED
             t_raw += dump.raw_size
             t_comp += dump.comp_size
             t_files += dump.nfiles
             for c, col in enumerate(cspecs) :
-                text = col[1] % dump
+                attrs = { # [fixme] should be automated
+                    'disk': dump.disk,
+                    'upstate': DumpState.tostr(dump.state, up=True),
+                    'raw_hsize': human_size(dump.raw_size),
+                    'comp_hsize': human_size(dump.comp_size),
+                    'comp_ratio': ((dump.comp_size * 100.0 / dump.raw_size)
+                                   if dump.raw_size > 0 else 0.0),
+                    'nfiles': dump.nfiles,
+                }
+                text = col[1] % attrs
                 frame = (Frame.LR | (Frame.BOTTOM if r == last else 0))
                 table.add(text, r+2, c, frame=frame, **col[2])
         # totals line

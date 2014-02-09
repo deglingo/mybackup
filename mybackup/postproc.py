@@ -31,7 +31,11 @@ class JRunInfo (_JRunInfo) :
                            start_hrs='X',
                            end_hrs='X',
                            runid=0,
-                           dumps={})
+                           dumps={},
+                           errors=[],
+                           warnings=[],
+                           stranges=[],
+                           notes=[])
 
 class JDumpInfo (_JDumpInfo) :
 
@@ -187,7 +191,7 @@ class PostProcess :
         # [fixme] should not be here - send a report (from a fresh
         # journal)
         self.journal.reopen('r', skip_postproc=False)
-        rep = report.Report(self.config, self.journal.summary(), width=70)
+        rep = report.Report(self.config, self.analysis(self.journal.get_state()), width=70)
         sep = ''.center(70, '-') + '\n'
         info("REPORT:\n%s%s\n%s%s\n%s" % (sep, rep.title, sep, rep.body, sep))
         if sendmail(addrs=self.config.mailto, subject=rep.title, body=rep.body) != 0 :

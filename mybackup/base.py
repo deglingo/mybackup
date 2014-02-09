@@ -299,9 +299,6 @@ def _atd_repr (s) :
     return '<%s %s>' % (s.__class__.__name__, s.__d)
 
 def _atd_getattr (s, n) :
-    if n[0] == '_' :
-        return object.__dict__[n]
-    assert (not s._atd__names) or n in s._atd__names, n
     return s.__d[n]
 
 def _atd_getitem (s, n) :
@@ -346,16 +343,16 @@ class enumbase :
             assert 0, v
 
     @classmethod
-    def tostr (cls, v) :
+    def tostr (cls, v, up=False) :
         if isinstance(v, int) :
             assert v in cls.byvalue, v
-            return cls.byvalue[v]
+            v = cls.byvalue[v]
         elif isinstance(v, str) :
             v = v.lower()
             assert v in cls.byname, v
-            return v
         else :
             assert 0, v
+        return v.upper() if up else v
 
     @classmethod
     def cmp (cls, v, *a) :
