@@ -108,9 +108,8 @@ class PostProcess :
         self.runinfo = self.analysis(self.journal.get_state())
         try:
             self.__run()
-        except Exception as exc:
-            self.panic("unhandled exception: %s: %s" %
-                       (exc.__class__.__name__, exc))
+        except:
+            self.panic("unhandled exception: %s" % exc_name())
         self.journal.close()
         # [fixme] should not be here - send a report (from a fresh
         # journal)

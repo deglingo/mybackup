@@ -186,6 +186,16 @@ def print_exception (exc_info=None, f=None) :
     f.writelines(format_exception(exc_info))
 
 
+# exc_name:
+#
+def exc_name (exc=None) :
+    if exc is None :
+        tp, exc, tb = sys.exc_info()
+    else :
+        tp = exc.__class__
+    return "%s: %s" % (tp.__name__, exc)
+
+
 # human_size:
 #
 def human_size (s) :
