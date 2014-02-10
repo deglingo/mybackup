@@ -102,8 +102,7 @@ class PostProcess :
         self.db = mbdb.DB(self.config.dbfile)
         self.journal = journal.Journal(config.journalfile, 'a',
                                        tool_name='clean',
-                                       lockfile=config.journallock,
-                                       skip_postproc=True)
+                                       lockfile=config.journallock)
         self.runinfo = self.analysis(self.journal.get_state())
         try:
             self.__run()

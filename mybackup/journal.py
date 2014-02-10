@@ -21,60 +21,6 @@ class JournalRollError (Exception) :
     pass
 
         
-# JournalState:
-#
-_JournalState = attrdict (
-    '_JournalState', 
-    (),
-    defo={'hrs': 'X',
-          'endhrs': 'X',
-          'config': '',
-          'state': 'init',
-          'dumps': {},
-          'notes': [],
-          'stranges': [],
-          'warnings': [],
-          'errors': [],
-          'postprocs': [],
-          'current_postproc': None})
-
-
-class JournalState (_JournalState) :
-    nstranges = property(lambda s: len(s.stranges))
-    nwarnings = property(lambda s: len(s.warnings))
-    nerrors = property(lambda s: len(s.errors))
-    
-
-# DumpInfo:
-#
-_DumpInfo = attrdict (
-    '_DumpInfo',
-    (),
-    defo={'state': DumpState.SELECTED,
-          'prevrun': -1,
-          'raw_size': -1,
-          'comp_size': -1,
-          'nfiles': -1,
-          'fname': ''})
-
-class DumpInfo (_DumpInfo) :
-    upstate = property(lambda s: DumpState.tostr(s.state).upper())
-    raw_hsize = property(lambda s: human_size(s.raw_size))
-    comp_hsize = property(lambda s: human_size(s.comp_size))
-    comp_ratio = property(lambda s: (s.comp_size * 100.0 / s.raw_size)
-                          if s.raw_size > 0 else 0.0)
-
-
-# PostProcInfo:
-#
-PostProcInfo = attrdict(
-    'PostProcInfo',
-    (),defo={'hrs': 'X',
-             'endhrs': 'X',
-             'panics': []})
-
-
-
 # LogJournalHandler:
 #
 # [FIXME] very strange
@@ -286,13 +232,12 @@ class Journal :
     #
     # [FIXME] LOCKING IS WRONG!
     #
-    def __init__ (self, fname, mode, tool_name, lockfile, skip_postproc=False) :
+    def __init__ (self, fname, mode, tool_name, lockfile) :
         self.lockfile = lockfile
         self.tlock = threading.Lock() # useless ?
         self.fname = fname
         self.mode = mode
         self.tool_name = tool_name
-        self.skip_postproc = skip_postproc
         self.log_handler = None
         self.__open = False
         self.__doopen()
@@ -308,7 +253,6 @@ class Journal :
     def __doopen (self) :
         logger = logging.getLogger(log_domain())
         assert not self.isopen()
-        self.state = JournalState()
         self.__open = True
         # new style
         self.state2 = []
@@ -385,13 +329,6 @@ class Journal :
                 self.log_handler = None
 
 
-    # summary:
-    #
-    def summary (self) :
-        with self.tlock :
-            return copy.deepcopy(self.state)
-
-
     # delete:
     #
     def delete (self) :
@@ -431,22 +368,11 @@ class Journal :
             line = line.strip()
             if not line : continue
             try:
-                self.__read_line(line)
                 self.__read_line2(line)
             except Exception:
                 exception("%s:%d: invalid journal line: '%s'" %
                           (fname, lno+1, line))
                 continue
-
-    def __read_line (self, line) :
-        argv = line.split(':')
-        key = argv.pop(0)
-        kspecs = Journal.KEYSPECS[key]
-        assert len(argv) == len(kspecs), (key, argv)
-        kwargs = {}
-        for i, (pname, ptype) in enumerate(kspecs) :
-            kwargs[pname] = self.adapt(ptype, argv[i])
-        self.__update(key, kwargs)
 
     def __read_line2 (self, line) :
         trace("<< `%s'" % line)
@@ -488,63 +414,6 @@ class Journal :
         os.rename(self.fname, dest)
 
 
-    # __update:
-    #
-    def __update (self, key, kw) :
-        s = self.state
-        # skip postproc messages
-        if key != 'CLEAN-END' and self.skip_postproc and s.current_postproc is not None :
-            # trace ?
-            return
-        # choose your key
-        if key == '_OPEN' :
-            info("[TODO] JOURNAL OPEN: %s" % repr(kw))
-        elif key == '_CLOSE' :
-            info("[TODO] JOURNAL CLOSE: %s" % repr(kw))
-        elif key == 'START' :
-            s.update(state='started',
-                     config=kw['config'],
-                     runid=kw['runid'],
-                     hrs=kw['hrs'])
-        elif key == 'END' :
-            s.update(endhrs=kw['hrs'])
-        elif key == 'SELECT' :
-            for d in kw['disks'].split(',') :
-                s.dumps[d] = DumpInfo(disk=d)
-        elif key == 'SCHEDULE' :
-            s.dumps[kw['disk']].update(state=DumpState._SCHEDULED,
-                                       prevrun=kw['prevrun'])
-        elif key == 'DUMP-START' :
-            s.dumps[kw['disk']].update(state=DumpState._STARTED,
-                                       fname=kw['fname'])
-        elif key == 'DUMP-FINISHED' :
-            s.dumps[kw['disk']].update(state=kw['state'],
-                                       raw_size=kw['raw_size'],
-                                       comp_size=kw['comp_size'],
-                                       nfiles=kw['nfiles'])
-        elif key == 'STRANGE' :
-            s.stranges.append((kw['source'], kw['line']))
-        elif key == 'WARNING' :
-            s.warnings.append((kw['message'],))
-        elif key == 'ERROR' :
-            s.errors.append((kw['message'],))
-        elif key == 'CLEAN-START' :
-            assert kw['hrs'] not in s.postprocs
-            pp = PostProcInfo(hrs=kw['hrs'])
-            s.postprocs.append(pp)
-            s.current_postproc = pp
-        elif key == 'CLEAN-END' :
-            assert s.current_postproc is not None
-            s.current_postproc.update(endhrs=kw['hrs'])
-            s.current_postproc = None
-        elif key == 'DUMP-FIX' :
-            pass # ? assert s.current_postproc is not None
-        else :
-            pass #assert 0, (key, kw)
-        # trace("JOURNAL UPDATE: %s\n%s" %
-        #       (key, pprint.pformat(s.asdict())))
-
-
     # record:
     #
     def record (self, key, **kwargs) :
@@ -556,9 +425,24 @@ class Journal :
     def __record (self, key, **kwargs) :
         entry = self.make_entry(key, kwargs)
         self.__update2(entry)
-        # [removeme]
-        self.__oldrecord(key, kwargs)
-        #
+        # write file
+        line = [key] + list(Journal.convert(ptype, getattr(entry, pname))
+                            for pname, ptype in Journal.KEYSPECS[key])
+        trace("JOURNAL: %s" % line)
+        # atomic update - [fixme] looks ugly but i don't know a better
+        # way ; maybe the file should be chunked if it becomes too big
+        # ?
+        tmp = self.fname + '.tmp'
+        f = open(tmp, 'wt')
+        # file must exist!
+        f.write(open(self.fname, 'rt').read())
+        f.write(':'.join(line))
+        f.write('\n')
+        f.flush()
+        os.fsync(f.fileno()) # fdatasync ?
+        f.close()
+        os.rename(tmp, self.fname)
+
 
     def __update2 (self, entry) :
         with self.tlock :
@@ -588,17 +472,6 @@ class Journal :
         # update state
         self.__update(key, kwargs)
         # write
-        # [FIXME] probably some sync needed here
-        trace("JOURNAL:%s: %s" % (key, ', '.join("'%s'" % w for w in line[1:])))
-        tmp = self.fname + '.tmp'
-        f = open(tmp, 'wt')
-        # file must exist!
-        f.write(open(self.fname, 'rt').read())
-        f.write(':'.join(line))
-        f.write('\n')
-        f.flush()
-        f.close()
-        os.rename(tmp, self.fname)
 
 
     # make_entry:
