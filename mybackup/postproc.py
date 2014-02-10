@@ -11,7 +11,6 @@ from mybackup.log import *
 from mybackup.tools import *
 from mybackup import journal
 from mybackup import mbdb
-from mybackup import report
 
 
 # PostProcPanic:
@@ -111,19 +110,9 @@ class PostProcess :
         except:
             self.panic("unhandled exception: %s" % exc_name())
         self.journal.close()
-        # [fixme] should not be here - send a report (from a fresh
-        # journal)
-        rep = report.Report(self.config)
-        sep = ''.center(70, '-') + '\n'
-        info("REPORT:\n%s%s\n%s%s\n%s" % (sep, rep.title, sep, rep.body, sep))
-        if sendmail(addrs=self.config.mailto, subject=rep.title, body=rep.body) != 0 :
-            self.panic("sendmail failed!")
-            return
         # time to panic now
         if self.panic_count > 0 :
             raise PostProcPanic()
-        # and roll the journal
-        self.journal.roll(dirname=self.config.journaldir, hrs=self.runinfo.start_hrs)
 
 
     # __run:

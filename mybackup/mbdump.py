@@ -14,6 +14,7 @@ from mybackup.config import Config
 from mybackup.journal import Journal
 from mybackup import mbdb
 from mybackup import postproc
+from mybackup import report
 from mybackup import mbapp
 
 # debug
@@ -151,6 +152,14 @@ class MBDumpApp (mbapp.MBAppBase) :
         # cleanup
         pp = postproc.PostProcess()
         pp.run(self.config)
+        # format and send the report
+        rep = report.Report(self.config)
+        sep = ''.center(70, '-') + '\n'
+        info("REPORT:\n%s%s\n%s%s\n%s" % (sep, rep.title, sep, rep.body, sep))
+        if sendmail(addrs=self.config.mailto, subject=rep.title, body=rep.body) != 0 :
+            raise Exception("sendmail failed!") # [fixme]
+        # and roll the journal
+        self.roll_journal()
         # ok
         info("all done, bye!")
 

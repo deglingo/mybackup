@@ -392,14 +392,22 @@ class Journal :
             return copy.deepcopy(self.state)
 
 
+    # delete:
+    #
+    def delete (self) :
+        warning("[FIXME] Journal.delete()")
+        os.unlink(self.fname)
+
+        
     # roll:
     #
     # [FIXME] we should have a 'closed' flag to make sure we don't
     # read/write after a roll!
     #
-    def roll (self, dirname, hrs) :
+    def roll (self, dirname, sfx) :
+        assert sfx
         with self.flock :
-            self.__roll(dirname, hrs)
+            self.__roll(dirname, sfx)
 
 
     # __read_file:
@@ -457,11 +465,11 @@ class Journal :
 
     # __roll:
     #
-    def __roll (self, dirname, hrs) :
+    def __roll (self, dirname, sfx) :
         self.close()
         # first make sure the dest is OK
         base, ext = os.path.splitext(os.path.basename(self.fname))
-        dest = os.path.join(dirname, base + '.' + hrs + ext)
+        dest = os.path.join(dirname, base + sfx + ext)
         trace("rolling journal to '%s'" % dest)
         try:
             fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL)

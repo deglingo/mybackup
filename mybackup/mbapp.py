@@ -6,8 +6,10 @@ __all__ = [
 
 import logging, os, sys
 
+from mybackup.base import *
 from mybackup.log import *
 from mybackup import config
+from mybackup import journal
 
 
 # MBAppBase:
@@ -114,3 +116,22 @@ class MBAppBase :
     #
     def __run (self) :
         self.app_run()
+
+
+    # roll_journal:
+    #
+    # [fixme] ?
+    #
+    def roll_journal (self) :
+        trace("rolling journal")
+        j = journal.Journal(self.config.journalfile, mode='r',
+                            tool_name='roll', lockfile=self.config.journallock)
+        ss = j.get_state()[0][:2]
+        assert ss[0].key == '_OPEN', ss
+        assert ss[0].tool == 'dump', ss
+        if len(ss) > 1 :
+            assert ss[1].key == 'START', ss
+            j.roll(dirname=self.config.journaldir, sfx='.%s' % ss[1].hrs)
+        else :
+            info("dump never started, deleting journal")
+            j.delete()
