@@ -52,6 +52,10 @@ class Report :
         self.warnings = copy.deepcopy(self.runinfo.warnings)
         self.stranges = copy.deepcopy(self.runinfo.stranges)
         self.notes = copy.deepcopy(self.runinfo.notes)
+        self.messages = copy.deepcopy(self.runinfo.messages)
+        # [fixme]
+        for nlvl, nmsg in self.messages :
+            self.pre_errors.append("NOTE: %s" % nmsg)
         # check if we started at all
         if self.runinfo.start_hrs == 'X' :
             self.maybe_error("this run did not start!?")

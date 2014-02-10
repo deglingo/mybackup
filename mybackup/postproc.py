@@ -35,7 +35,8 @@ class JRunInfo (_JRunInfo) :
                            errors=[],
                            warnings=[],
                            stranges=[],
-                           notes=[])
+                           notes=[],
+                           messages=[])
 
 class JDumpInfo (_JDumpInfo) :
 
@@ -90,6 +91,8 @@ class JState :
                                                raw_size=ent.raw_size,
                                                comp_size=ent.comp_size,
                                                nfiles=ent.nfiles)
+            elif ent.key == 'USER-MESSAGE' :
+                runinfo.messages.append((ent.level, ent.message))
             elif ent.key == 'END' :
                 assert runinfo.end_hrs == 'X'
                 runinfo.update(end_hrs=ent.hrs)

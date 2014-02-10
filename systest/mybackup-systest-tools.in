@@ -50,8 +50,8 @@ st_exec()
 
 st_mbdump() {
 	test x"${1:-}" = x"!" \
-		&& { shift; st_exec '!' mbdump ${ST_MBDUMP_OPTS} ${@}; } \
-		|| { st_exec mbdump ${ST_MBDUMP_OPTS} ${@}; }
+		&& { shift; st_exec '!' mbdump ${ST_MBDUMP_OPTS} "${@}"; } \
+		|| { st_exec mbdump ${ST_MBDUMP_OPTS} "${@}"; }
 }
 
 st_mbclean() {

@@ -28,6 +28,7 @@ class Config :
         # [fixme] runtime
         self.verb_level = 2
         self.force = False
+        self.user_notes = []
 
         
     # init:

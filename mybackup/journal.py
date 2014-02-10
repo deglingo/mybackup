@@ -156,6 +156,9 @@ class Journal :
 
         'ERROR': (('message', 'str'),),
 
+        'USER-MESSAGE': (('level', 'int'),
+                         ('message', 'str')),
+
         # mbclean only
         'CLEAN-START': (('hrs', 'hrs'),),
 
@@ -529,7 +532,7 @@ class Journal :
         elif key == 'DUMP-FIX' :
             pass # ? assert s.current_postproc is not None
         else :
-            assert 0, (key, kw)
+            pass #assert 0, (key, kw)
         # trace("JOURNAL UPDATE: %s\n%s" %
         #       (key, pprint.pformat(s.asdict())))
 

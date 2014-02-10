@@ -28,10 +28,12 @@ USAGE: mbdump [OPTIONS] CONFIG [DISK...]
 
 OPTIONS:
 
-  -f, --force    force dump(s)
-  -q, --quiet    be less verbose
-  -v, --verbose  be more verbose
-  -h, --help     print this message and exit
+  -n, --note NOTE  add some personal note which will appear in the
+                   final report (may be given multiple times)
+  -f, --force      force dump(s)
+  -q, --quiet      be less verbose
+  -v, --verbose    be more verbose
+  -h, --help       print this message and exit
 """
 
 
@@ -88,8 +90,8 @@ class MBDumpApp (mbapp.MBAppBase) :
         # parse the command line
         # [fixme] -c should be elsewhere
         _cfgparam = ''
-        shortopts = 'c:fhqv'
-        longopts = ['force', 'help']
+        shortopts = 'c:fn:hqv'
+        longopts = ['force', 'note=', 'help']
         opts, args = getopt.gnu_getopt(sys.argv[1:], shortopts, longopts)
         for o, a in opts :
             if o in ('-h', '--help') :
@@ -97,6 +99,9 @@ class MBDumpApp (mbapp.MBAppBase) :
                 sys.exit(0)
             elif o in ('-f', '--force') :
                 self.config.force = True
+            elif o in ('-n', '--note') :
+                # [todo] logging level
+                self.config.user_notes.append((0, a))
             elif o in ('-q', '--quiet') :
                 self.quiet()
             elif o in ('-v', '--verbose') :
@@ -199,6 +204,9 @@ class MBDumpApp (mbapp.MBAppBase) :
                   (self.config.cfgname))
             sys.exit(1)
         self.journal.record('START', config=self.config.cfgname, runid=self.runid, hrs=self.config.start_hrs)
+        # record the user messages
+        for nlvl, nmsg in self.config.user_notes :
+            self.journal.record('USER-MESSAGE', level=nlvl, message=nmsg)
         self.journal.record('SELECT', disks=','.join(s.disk for s in sched))
         # schedule the dumps
         self.trigger_hooks('schedule', [d.cfgdisk for d in sched])
