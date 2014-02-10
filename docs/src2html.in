@@ -1,0 +1,10 @@
+#!@SHELL@
+# -*- shell-script -*-
+
+test -d html && rm -rf html || true
+mkdir html
+for FILE in "@abs_top_srcdir@/mybackup"/*.py; do
+	DEST="html/`basename $FILE .py`.html"
+	echo " - $FILE -> $DEST"
+	code2html --language-mode=python --linenumbers --replace-tabs=4 "$FILE" "$DEST" 
+done

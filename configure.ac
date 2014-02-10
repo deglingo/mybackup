@@ -85,4 +85,5 @@ AC_CONFIG_FILES([systest/mybackup-systest.conf])
 AC_CONFIG_FILES([systest/mybackup-systest-common])
 AC_CONFIG_FILES([systest/mybackup-systest-tools])
 AC_CONFIG_FILES(m4_map_args_w(mb_systest_modules, [systest/], [], [ ]))
+AC_CONFIG_FILES([docs/src2html], [chmod +x docs/src2html])
 AC_OUTPUT
