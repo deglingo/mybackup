@@ -10,6 +10,7 @@ from mybackup.sysconf import SYSCONF
 from mybackup.base import *
 from mybackup.log import *
 from mybackup.asciitable import Table, Frame, Justify
+from mybackup import journal
 
 
 # Report:
@@ -26,12 +27,16 @@ class Report :
     
     # __init__:
     #
-    def __init__ (self, config, runinfo, running=False, width=70) :
-        self.width = width
-        # NOTE: only use config for infos which are not in runinfo!
+    def __init__ (self, config) : # [fixme] running=False, width=70) :
+        # NOTE: only use config for infos which are not in the journal!
         self.config = config
-        self.runinfo = runinfo
-        self.running = running
+        self.running = False
+        self.width = 70 #width
+        # open and read the journal
+        self.journal = journal.Journal(self.config.journalfile,
+                                       mode='r', tool_name='report',
+                                       lockfile=self.config.journallock)
+        self.runinfo = self.analysis(self.journal.get_state())
         self.__report_prep()
         self.__report_title()
         self.__report_body()
@@ -42,6 +47,26 @@ class Report :
             self.notes.append(msg)
         else :
             self.pre_errors.append(msg)
+
+
+    # analysis:
+    #
+    def analysis (self, state) :
+        # filter
+        ssdump = None
+        ssclean = None
+        for session in state :
+            op = session[0]
+            assert op.key == '_OPEN', op
+            if op.tool == 'dump' :
+                assert ssdump is None
+                ssdump = session
+            elif op.tool == 'clean' :
+                ssclean = session
+            else :
+                assert 0, op.tool
+
+        return JState.analysis([ssdump, ssclean])
 
 
     # __report_prep:

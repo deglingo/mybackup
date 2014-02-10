@@ -16,9 +16,9 @@ test_crash_setup()
 	# setup_fs
 	st_setup_fs 1
 	# create the config
-	st_mkfile "/etc/mybackup/TESTCRASH/mybackup.conf" - <<EOF
+	st_mkfile "/etc/mybackup/$ST_TEST_NAME/mybackup.conf" - <<EOF
 {
-  "mailto": "${MYBACKUP_SYSTEST_MAILTO:-}",
+  "mailto": "${ST_MAILTO:-}",
   "scripts": {
     "KILLER": {
       "prog": "./killer",
@@ -38,7 +38,7 @@ test_crash_setup()
 }
 EOF
 
-	st_mkfile -m755 "/etc/mybackup/TESTCRASH/killer" - <<EOF
+	st_mkfile -m755 "/etc/mybackup/$ST_TEST_NAME/killer" - <<EOF
 #!/bin/sh
 trace() { echo "KILLER: \$*"; }
 LOGFILE="$ST_ROOTDIR/tmp/killer.log"
@@ -68,24 +68,24 @@ test_crash_main()
 	st_switch_date -d1 -h1
 	st_switch_fsday 1
 	# first make sure mbclean succeeds in a clean env
-	st_mbclean TESTCRASH
+	st_mbclean $ST_TEST_NAME
 	# this one should work
 	st_switch_date -d1 -h2
-	st_mbdump -f TESTCRASH
+	st_mbdump -f $ST_TEST_NAME
 	# this must fail
 	st_switch_date -d1 -h3
 	st_exec '!' FOO='bar baz' MB_TEST_CRASH_TRIGGER='schedule' \
-		mbdump -f TESTCRASH
+		mbdump -f $ST_TEST_NAME
 	# make sure it won't run again (because the journal is still
 	# present)
 	st_switch_date -d1 -h4
-	st_mbdump '!' -f TESTCRASH
+	st_mbdump '!' -f $ST_TEST_NAME
 	# mbclean should clean up the mess
 	st_switch_date -d1 -h5
-	st_mbclean TESTCRASH
+	st_mbclean $ST_TEST_NAME
 	# so a new run will succeed
 	st_switch_date -d1 -h6
-	st_mbdump -f TESTCRASH
+	st_mbdump -f $ST_TEST_NAME
 	# all done
 	trace "OK"
 }

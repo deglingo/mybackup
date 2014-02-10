@@ -20,85 +20,6 @@ class PostProcPanic (Exception) :
     pass
 
 
-_JRunInfo = attrdict('_JRunInfo')
-_JDumpInfo = attrdict('_JDumpInfo')
-
-class JRunInfo (_JRunInfo) :
-
-    def __init__ (self) :
-        _JRunInfo.__init__(self,
-                           config='X',
-                           start_hrs='X',
-                           end_hrs='X',
-                           runid=0,
-                           dumps={},
-                           errors=[],
-                           warnings=[],
-                           stranges=[],
-                           notes=[],
-                           messages=[])
-
-class JDumpInfo (_JDumpInfo) :
-
-    def __init__ (self, disk) :
-        _JDumpInfo.__init__(self,
-                            disk=disk,
-                            state='selected',
-                            fname='',
-                            prevrun=-1,
-                            raw_size=-1,
-                            comp_size=-1,
-                            nfiles=-1)
-    
-
-# JState:
-#
-class JState :
-
-
-    # analysis:
-    #
-    @staticmethod
-    def analysis (state) :
-        runinfo = JRunInfo()
-        for session in state :
-            op = session[0]
-            assert op.key == '_OPEN', op
-            if op.tool == 'dump' :
-                JState._analysis_dump(runinfo, session)
-            else :
-                assert 0, op
-        return runinfo
-
-    @staticmethod
-    def _analysis_dump (runinfo, ss) :
-        for ent in ss[1:] :
-            if ent.key == 'START' :
-                assert runinfo.start_hrs == 'X'
-                runinfo.update(config=ent.config, start_hrs=ent.hrs, runid=ent.runid)
-            elif ent.key == 'SELECT' :
-                runinfo.dumps = dict((n, JDumpInfo(disk=n))
-                                     for n in ent.disks.split(','))
-            elif ent.key == 'SCHEDULE' :
-                assert runinfo.dumps[ent.disk].state == 'selected'
-                runinfo.dumps[ent.disk].update(state='scheduled', prevrun=ent.prevrun)
-            elif ent.key == 'DUMP-START' :
-                assert runinfo.dumps[ent.disk].state == 'scheduled'
-                runinfo.dumps[ent.disk].update(state='partial', fname=ent.fname)
-            elif ent.key == 'DUMP-FINISHED' :
-                assert runinfo.dumps[ent.disk].state == 'partial'
-                runinfo.dumps[ent.disk].update(state=DumpState.tostr(ent.state),
-                                               raw_size=ent.raw_size,
-                                               comp_size=ent.comp_size,
-                                               nfiles=ent.nfiles)
-            elif ent.key == 'USER-MESSAGE' :
-                runinfo.messages.append((ent.level, ent.message))
-            elif ent.key == 'END' :
-                assert runinfo.end_hrs == 'X'
-                runinfo.update(end_hrs=ent.hrs)
-            else :
-                assert 0, ent
-
 # PostProcess:
 #
 class PostProcess :
@@ -193,8 +114,7 @@ class PostProcess :
         self.journal.close()
         # [fixme] should not be here - send a report (from a fresh
         # journal)
-        self.journal.reopen('r', skip_postproc=False)
-        rep = report.Report(self.config, self.analysis(self.journal.get_state()), width=70)
+        rep = report.Report(self.config)
         sep = ''.center(70, '-') + '\n'
         info("REPORT:\n%s%s\n%s%s\n%s" % (sep, rep.title, sep, rep.body, sep))
         if sendmail(addrs=self.config.mailto, subject=rep.title, body=rep.body) != 0 :

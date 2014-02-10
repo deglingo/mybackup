@@ -381,7 +381,7 @@ def enum (tpname, fields) :
 #
 _DumpState = enum(
     '_DumpState',
-    ('ok', 'partial', 'failed', 'broken',
+    ('none', 'ok', 'partial', 'failed', 'broken',
      'selected', 'scheduled', 'started', 'empty'))
 
 class DumpState (_DumpState) :
@@ -422,3 +422,106 @@ def plural (n, single, plural=None, addn=True) :
     if addn :
         text = '%d %s' % (n, text)
     return text
+
+
+######################################################################
+
+
+
+_JRunInfo = attrdict('_JRunInfo')
+_JDumpInfo = attrdict('_JDumpInfo')
+
+class JRunInfo (_JRunInfo) :
+
+    def __init__ (self) :
+        _JRunInfo.__init__(self,
+                           config='X',
+                           start_hrs='X',
+                           end_hrs='X',
+                           runid=0,
+                           dumps={},
+                           errors=[],
+                           warnings=[],
+                           stranges=[],
+                           notes=[],
+                           messages=[])
+
+class JDumpInfo (_JDumpInfo) :
+
+    def __init__ (self, disk) :
+        _JDumpInfo.__init__(self,
+                            disk=disk,
+                            state='selected',
+                            fname='',
+                            prevrun=-1,
+                            raw_size=-1,
+                            comp_size=-1,
+                            nfiles=-1,
+                            nfixes=0)
+    
+
+# JState:
+#
+class JState :
+
+
+    # analysis:
+    #
+    @staticmethod
+    def analysis (state) :
+        runinfo = JRunInfo()
+        for session in state :
+            op = session[0]
+            assert op.key == '_OPEN', op
+            if op.tool == 'dump' :
+                JState._analysis_dump(runinfo, session)
+            elif op.tool == 'clean' :
+                JState._analysis_clean(runinfo, session)
+            else :
+                assert 0, op
+        return runinfo
+
+    @staticmethod
+    def _analysis_dump (runinfo, ss) :
+        for ent in ss[1:] :
+            if ent.key == 'START' :
+                assert runinfo.start_hrs == 'X'
+                runinfo.update(config=ent.config, start_hrs=ent.hrs, runid=ent.runid)
+            elif ent.key == 'SELECT' :
+                runinfo.dumps = dict((n, JDumpInfo(disk=n))
+                                     for n in ent.disks.split(','))
+            elif ent.key == 'SCHEDULE' :
+                assert runinfo.dumps[ent.disk].state == 'selected'
+                runinfo.dumps[ent.disk].update(state='scheduled', prevrun=ent.prevrun)
+            elif ent.key == 'DUMP-START' :
+                assert runinfo.dumps[ent.disk].state == 'scheduled'
+                runinfo.dumps[ent.disk].update(state='partial', fname=ent.fname)
+            elif ent.key == 'DUMP-FINISHED' :
+                assert runinfo.dumps[ent.disk].state == 'partial'
+                runinfo.dumps[ent.disk].update(state=DumpState.tostr(ent.state),
+                                               raw_size=ent.raw_size,
+                                               comp_size=ent.comp_size,
+                                               nfiles=ent.nfiles)
+            elif ent.key == 'USER-MESSAGE' :
+                runinfo.messages.append((ent.level, ent.message))
+            elif ent.key == 'END' :
+                assert runinfo.end_hrs == 'X'
+                runinfo.update(end_hrs=ent.hrs)
+            else :
+                assert 0, ent
+
+
+    # _analysis_clean:
+    #
+    @staticmethod
+    def _analysis_clean (runinfo, ss) :
+        for ent in ss[1:] :
+            if ent.key == 'WARNING' :
+                runinfo.warnings.append(ent.message)
+            elif ent.key == 'DUMP-FIX' :
+                dump = runinfo.dumps[ent.disk]
+                if not DumpState.cmp(ent.state, 'none') :
+                    dump.state = ent.state
+                dump.nfixes += 1
+            else :
+                assert 0, ent
