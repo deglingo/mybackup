@@ -80,7 +80,7 @@ class Config :
                                         r'\title=COMP SIZE\right\%(comp_hsize)s',
                                         r'\title=RATIO\right\%(comp_ratio).2f%%',
                                         r'\title=FILES\right\%(nfiles)d')))
-        self.scripts = dict(
+        self.scripts = collections.OrderedDict(
             (n, CfgScript(self, n, sconf))
             for n, sconf in conf.pop('scripts', {}).items())
         self.disks = collections.OrderedDict(
