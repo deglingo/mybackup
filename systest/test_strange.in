@@ -1,0 +1,75 @@
+# -*- shell-script -*-
+
+# test_strange.in - Test the 'strange parser' tool.
+
+
+# test_strange_help:
+#
+test_strange_help()
+{
+	cat <<EOF
+Test the 'strange parser' tool.
+EOF
+}
+
+
+_fsday1()
+{
+	st_mkfile -r. -d "$1" -Rs1M /D1/F1A
+}
+
+
+# test_strange_setup
+#
+test_strange_setup()
+{
+	st_setup_fs 1
+
+	# create the config
+	st_mkfile "/etc/mybackup/$ST_TEST_NAME/mybackup.conf" - <<EOF
+{
+  "mailto": "${ST_MAILTO:-}",
+  "scripts": {
+    "strange-hook": {
+      "prog": "./strange-hook",
+      "options": []
+    }
+  },
+  "disks": {
+    "DISK_1": {
+      "path": "$ST_ROOTDIR/fs/D1",
+      "hooks": [{
+        "script": "strange-hook",
+        "triggers": "schedule",
+        "options": []
+      }]
+    }
+  }
+}
+EOF
+
+	st_mkfile -m755 "/etc/mybackup/$ST_TEST_NAME/strange-hook" - <<EOF
+#!@SHELL@
+echo "strange-hook-out:DEBUG: YOU SHOULD NOT SEE THIS IN REPORT!"
+echo "strange-hook-out:INFO: some important note here!"
+echo "strange-hook-out:WARNING: some warning"
+echo "strange-hook-out:ERROR: some error"
+echo "strange-hook-out:STRANGE: something's weird, really"
+echo "strange-hook-err:DEBUG: YOU SHOULD NOT SEE THIS IN REPORT!" >&2
+echo "strange-hook-err:INFO: some important note here!" >&2
+echo "strange-hook-err:WARNING: some warning" >&2
+echo "strange-hook-err:ERROR: some error" >&2
+echo "strange-hook-err:STRANGE: something's weird, really" >&2
+EOF
+}
+
+
+# test_strange_main
+#
+test_strange_main()
+{
+	local day=1
+	st_switch_date -d$day
+	st_switch_fsday $day
+	st_mbdump "$ST_TEST_NAME" -n "[expect] 2 errors, 2 warnings, 2 stranges"
+}

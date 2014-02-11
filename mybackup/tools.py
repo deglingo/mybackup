@@ -127,7 +127,7 @@ class StrangeParser :
         line = line.strip()
         if not line : return
         #trace("STRANGE:%s: %s" % (self.name, line))
-        self.journal.record('STRANGE', source=self.name, line=line)
+        self.journal.record('STRANGE', source=self.name, message=line)
 
 
 # DumperTar:

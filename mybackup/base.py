@@ -116,7 +116,7 @@ class PipeThread :
         try:
             self._run()
         except Exception:
-            error("%s: exception:" % self.name)
+            # [fixme] error("%s: exception:" % self.name)
             print_exception()
             sys.exit(1)
 
@@ -494,7 +494,9 @@ class JState :
     @staticmethod
     def _analysis_dump (runinfo, ss) :
         for ent in ss[1:] :
-            if ent.key == 'START' :
+            if JState._analysis_message(runinfo, ent) :
+                continue
+            elif ent.key == 'START' :
                 assert runinfo.start_hrs == 'X'
                 runinfo.update(config=ent.config, start_hrs=ent.hrs, runid=ent.runid)
             elif ent.key == 'SELECT' :
@@ -526,8 +528,8 @@ class JState :
     @staticmethod
     def _analysis_clean (runinfo, ss) :
         for ent in ss[1:] :
-            if ent.key == 'WARNING' :
-                runinfo.warnings.append(ent.message)
+            if JState._analysis_message(runinfo, ent) :
+                continue
             elif ent.key == 'DUMP-FIX' :
                 dump = runinfo.dumps[ent.disk]
                 if not DumpState.cmp(ent.state, 'none') :
@@ -535,3 +537,20 @@ class JState :
                 dump.nfixes += 1
             else :
                 assert 0, ent
+
+
+    # _analysis_message:
+    #
+    @staticmethod
+    def _analysis_message (runinfo, ent) :
+        if ent.key == 'NOTE' :
+            runinfo.notes.append(ent.message)
+        elif ent.key == 'STRANGE' :
+            runinfo.stranges.append((ent.source, ent.message))
+        elif ent.key == 'WARNING' :
+            runinfo.warnings.append(ent.message)
+        elif ent.key == 'ERROR' :
+            runinfo.errors.append(ent.message)
+        else :
+            return False
+        return True

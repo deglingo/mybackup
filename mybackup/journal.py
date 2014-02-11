@@ -96,7 +96,7 @@ class Journal :
                           ('nfiles',    'int')),
 
         'STRANGE': (('source', 'str'),
-                    ('line', 'str')),
+                    ('message', 'str')),
 
         'WARNING': (('message', 'str'),),
 

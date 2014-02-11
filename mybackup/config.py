@@ -57,7 +57,13 @@ class Config :
         # read the config file
         self.cfgfile = os.path.join(self.cfgdir, 'mybackup.conf')
         trace("reading config file: '%s'" % self.cfgfile)
-        conf = json.load(open(self.cfgfile, 'rt'))
+        try:
+            conf = json.load(open(self.cfgfile, 'rt'))
+        except:
+            exception("error in config file:\n%s" %
+                  ('\n'.join('%4d %s' % (i+1, l.rstrip())
+                             for i, l in enumerate(open(self.cfgfile, 'rt').readlines()))))
+            raise
         self.configure(conf)
 
 
