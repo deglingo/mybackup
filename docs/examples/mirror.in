@@ -4,8 +4,91 @@ set -eu
 #set -x
 
 # trace
-trace() { echo "mirror: $*"; }
+trace() { echo "mirror:DEBUG: $*"; }
 error() { echo "mirror:ERROR: $*" >&2; exit 1; }
 die() { echo "mirror:FATAL: $*" >&2; exit 1; }
 
 trace "MIRROR: $0 $@"
+
+# defaults
+EXCLUDE_FILES=
+CHECK_FILES=
+NTRIES=3
+STAMPFILE=
+# parse command line
+GTO='getopt -s sh -n mirror -o "n:x:c:s:h" -- "${@}"' \
+	|| die "getopt failed"
+eval set -- "`eval $GTO`"
+while true; do
+	case "$1" in
+		-h) usage; exit 0;;
+		-n) NTRIES="$2"; shift 2;;
+		-x) EXCLUDE_FILES="${EXCLUDE_FILES}:${2}"; shift 2;;
+		-c) CHECK_FILES="${CHECK_FILES}:${2}"; shift 2;;
+		-s) STAMPFILE="$2"; shift 2;;
+		--) shift; break;;
+		*) die "oups: arg $1"
+	esac
+done
+# arguments
+test $# -eq 2 || die "wrong args number: $@"
+SOURCE="$1"
+DEST="$2"
+# check stampfile
+if test x"$STAMPFILE" = x; then
+	trace "no stampfile file given, sync forced"
+else
+	test -e "$STAMPFILE" && OLDSTAMP="`cat $STAMPFILE`" || OLDSTAMP='X'
+	NEWSTAMP="`date '+%Y-%m-%d'`"
+	trace "stamps (old/new) : $OLDSTAMP/$NEWSTAMP"
+	if test x"$OLDSTAMP" = x"$NEWSTAMP"; then
+		trace "sync up to date, bye"
+		exit 0
+	else
+		trace "stamp mismatch, sync will be run"
+	fi
+fi
+# check files
+L="$CHECK_FILES"
+while test x"$L" != x; do
+	F="`echo $L | cut -d: -f1`"
+	L="`echo $L | cut -sd: -f2-`"
+	test x"$F" != x || continue
+	test -e "$F" \
+		&& trace "checkfile found: \`$F'" \
+		|| die "checkfile not found: \`$F'"
+done
+# ok, create the dest
+test -d "$DEST" || mkdir -vp "$DEST"
+#
+RSYNC="`which rsync`" && test -x "$RSYNC" || die "rsync not found ($RSYNC)"
+CMD="$RSYNC -a --delete --delete-excluded --numeric-ids --no-specials --one-file-system"
+L="$EXCLUDE_FILES"
+while test x"$L" != x; do
+	F="`echo $L | cut -d: -f1`"
+	L="`echo $L | cut -sd: -f2-`"
+	test x"$F" = x || CMD="${CMD} --exclude-from=\"$F\""
+done
+CMD="${CMD} \"$SOURCE/\" \"$DEST\""
+# run
+N=1
+while true; do
+	R=0
+	trace "[$N/$NTRIES] `pwd`> $CMD"
+	eval "$CMD" || R=$?
+	case $R in
+		0) trace "rsync: success"; break;;
+		*) error "rsync: failed ($R)";;
+	esac
+	if test $N -ge $NTRIES; then
+		die "rsync failed $N times, giving up"
+	fi
+	N=$((N+1))
+done
+# update stampfile
+trace "updating stampfile: \`$STAMPFILE'"
+test x"$STAMPFILE" = x || {
+	echo "$NEWSTAMP" >"$STAMPFILE.tmp" \
+		&& mv -f "$STAMPFILE.tmp" "$STAMPFILE"; }
+# ok
+trace "all done!"
