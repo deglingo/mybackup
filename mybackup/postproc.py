@@ -207,7 +207,6 @@ class PostProcess :
     # __check_dump_sanity:
     #
     def __check_dump_sanity (self, disk, dump, partfile, st) :
-        warning("dump comp size: '%s' (%s)" % (dump.comp_size, dump.comp_size.__class__))
         # now we know that the dump exists
         assert DumpState.cmp(dump.state, 'ok', 'partial', 'failed'), \
           DumpState.tostr(dump.state)
