@@ -58,6 +58,7 @@ m4_define([mb_modules], [ \
   mbapp \
   mbdump \
   mbclean \
+  mbcheck \
   mbui \
   mbuidlg \
 ])
@@ -86,6 +87,7 @@ AC_CONFIG_FILES([ \
 AC_CONFIG_FILES([tools/pycc], [chmod +x tools/pycc])
 AC_CONFIG_FILES([bin/mbdump], [chmod +x bin/mbdump])
 AC_CONFIG_FILES([bin/mbclean], [chmod +x bin/mbclean])
+AC_CONFIG_FILES([bin/mbcheck], [chmod +x bin/mbcheck])
 AC_CONFIG_FILES([bin/mbrun], [chmod +x bin/mbrun])
 AC_CONFIG_FILES([bin/mbui], [chmod +x bin/mbui])
 AC_CONFIG_FILES([docs/examples/mirror], [chmod +x docs/examples/mirror])

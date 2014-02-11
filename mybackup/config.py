@@ -84,7 +84,7 @@ class Config :
             for n, sconf in conf.pop('scripts', {}).items())
         self.disks = collections.OrderedDict(
             (n, CfgDisk(self, n, dconf))
-            for n, dconf in conf.pop('disks').items())
+            for n, dconf in conf.pop('disks', {}).items())
 
         assert not conf, conf
 

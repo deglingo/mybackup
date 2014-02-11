@@ -1,3 +1,3 @@
 #
 
-bin_SCRIPTS = mbrun mbdump mbclean mbui
+bin_SCRIPTS = mbrun mbdump mbclean mbcheck mbui

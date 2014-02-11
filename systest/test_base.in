@@ -16,14 +16,48 @@ EOF
 #
 test_base_setup()
 {
-	true
+	local oldpwd="`pwd`"
+	# dump environment and files list (do this in setup so the output
+	# is not polluted by files installed from here)
+	env | sort -k1 -t= >"$ST_ROOTDIR/TEST_BASE.ENV.txt"
+	cd "$ST_ROOTDIR"
+	find -print0 | sort -z | xargs -0 ls -lhd >"$ST_ROOTDIR/TEST_BASE.FILES.txt"
+	cd "$oldpwd"
+
+	# setup some config (just enough to pass mbcheck)
+	st_mkfile "/etc/mybackup/$ST_TEST_NAME/mybackup.conf" - <<EOF
+{
+}
+EOF
 }
 
 
 # _mbpy
 _mbpy()
 {
-	"@PYTHON@" -c 'import mybackup; print(mybackup.__file__)'
+	"@PYTHON@" -c "import $1; print($1.__file__)"
+}
+
+
+# checkexe
+#
+checkexe()
+{
+	local n="$1"
+	local w="`which $n`" || die "which '$n' failed ($?)"
+	test x"$w" != x || die "exe '$n' not found"
+	test -x "$w" || die "$n is not executable ($w)"
+	info "exe $n ok: $w (`readlink -e $w`)"
+}
+
+
+# checkmod
+#
+checkmod()
+{
+	local m="$1"
+	local f="`_mbpy $m`" || die "could not load module: '$m'"
+	info "mod $m ok: $f (`readlink -e $f`)"
 }
 
 
@@ -31,29 +65,12 @@ _mbpy()
 #
 test_base_main()
 {
-	info "hello, I am '$ST_USER:$ST_GROUP' and I live in '$ST_HOME' with '$ST_SHELL'"
 	# check paths
-	local mbdump="`which mbdump`" || die "mbdump not found"
-	local mbclean="`which mbclean`" || die "mbclean not found"
-	local mbpy="`_mbpy`" || die "mybackup module not found"
-	test -x "$mbdump" \
-		|| die "mbdump is not executable: '$mbdump'"
-	test -x "$mbclean" \
-		|| die "mbclean is not executable: '$mbclean'"
-	test -f "$mbpy" || die "mybackup module not found: '$mbpy'"
-	# report
-	info "mbdump:   '$mbdump' (`readlink -e $mbdump`)"
-	info "mbclean:  '$mbclean' (`readlink -e $mbclean`)"
-	info "mbpy:     '$mbpy' (`readlink -e $mbpy`)"
-	# dump environment
-	info "`fill -lf'=' '== ENV ='`"
-	local l
-	env | sort | while read l; do info " $l"; done
-	info "`fill -f'='`"
-	# list files
-	cd "$ST_ROOTDIR"
-	info "`fill -lf'=' '== FILES ='`"
-	find -print0 | sort -z | xargs -0 ls -lhd
-	info "`fill -f'='`"
-	info "bye!"
+	checkexe "mbdump"
+	checkexe "mbclean"
+	checkexe "mbcheck"
+	checkexe "mbui"
+	checkmod "mybackup"
+	# let's try an mbcheck
+	st_exec mbcheck $ST_TEST_NAME
 }
