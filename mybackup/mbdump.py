@@ -292,13 +292,16 @@ class MBDumpApp (mbapp.MBAppBase) :
         self.journal.record('DUMP-START', disk=dsched.disk, fname=destbase+destext)
         procs = []
         pipes = []
+        # [fixme] strange parsers
+        outparser = StrangeParser('dumptool', self.journal, ())
         # open dest file and index
         trace("temp dump file: '%s'" % destfull)
         fdest = open(destfull, 'wb')
         index = Index('/dev/null')
         # [fixme] filters
         trace("%s: starting the filters" % cdisk.name)
-        filters = [cmdexec(['gzip'], stdin=CMDPIPE, stdout=CMDPIPE)]
+        filters = [cmdexec(['gzip'], stdin=CMDPIPE, stdout=CMDPIPE, stderr=CMDPIPE)]
+        pipes.append(PipeThread('zip-err', filters[0].stderr, (), line_handler=outparser))
         # start the dumper
         trace("%s: starting the dumper" % cdisk.name)
         proc_dump = dumper.start(dsched.cfgdisk.path)
@@ -306,6 +309,7 @@ class MBDumpApp (mbapp.MBAppBase) :
         procs.append(proc_dump)
         p_dump = PipeThread('dumper', proc_dump.stdout, ())
         pipes.append(p_dump)
+        pipes.append(PipeThread('dump-err', proc_dump.stderr, (), line_handler=outparser))
         # start the index
         trace("%s: starting the index" % cdisk.name)
         proc_index = dumper.start_index()
