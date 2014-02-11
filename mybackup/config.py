@@ -81,10 +81,12 @@ class Config :
                                         r'\title=FILES\right\%(nfiles)d')))
         self.scripts = dict(
             (n, CfgScript(self, n, sconf))
-            for n, sconf in conf.get('scripts', {}).items())
+            for n, sconf in conf.pop('scripts', {}).items())
         self.disks = collections.OrderedDict(
             (n, CfgDisk(self, n, dconf))
             for n, dconf in conf.pop('disks').items())
+
+        assert not conf, conf
 
         # create some directories
         # [fixme] not the right place for this !?
@@ -136,12 +138,15 @@ class CfgDisk :
 
     # configure:
     #
-    def configure (self, dconf) :
-        dconf = copy.deepcopy(dconf)
-        self.orig = dconf.pop('orig', '')
+    def configure (self, conf_) :
+        conf = copy.deepcopy(conf_)
+        self.path = conf.pop('path')
+        self.orig = conf.pop('orig', '')
+        self.hooks = conf.pop('hooks', [])
+        assert not conf, conf
         # [removeme]
-        for n, v in dconf.items() :
-            setattr(self, n, v)
+        # for n, v in dconf.items() :
+        #     setattr(self, n, v)
 
 
     # get_dumper:
@@ -241,6 +246,10 @@ class CfgScript :
 
     # configure:
     #
-    def configure (self, dconf) :
-        for n, v in dconf.items() :
-            setattr(self, n, v)
+    def configure (self, conf_) :
+        conf = copy.deepcopy(conf_)
+        self.prog = conf.pop('prog')
+        self.options = conf.pop('options', [])
+        assert not conf, conf
+        # for n, v in dconf.items() :
+        #     setattr(self, n, v)
