@@ -178,7 +178,8 @@ class MBDumpApp (mbapp.MBAppBase) :
             if self.config.force :
                 trace("%s: force flag set, selected" % disk.name)
             else :
-                dump = self.db.select_last_dump(disk)
+                dump = self.db.select_last_dump(disk.name)
+                trace("%s: %s" % (disk.name, dump))
                 if dump is None :
                     trace("%s: no last dump found, selected" % disk)
                 else :

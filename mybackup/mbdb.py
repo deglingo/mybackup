@@ -164,7 +164,8 @@ class DB :
     # select_last_dump:
     #
     def select_last_dump (self, disk) :
-        sel = self._execute('select * from dumps order by runid desc')
+        sel = self._execute('select * from dumps where disk == ?' +
+                            ' order by runid desc', (disk,))
         return sel[0] if sel else None
 
 
