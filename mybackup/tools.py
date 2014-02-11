@@ -12,7 +12,7 @@ __all__ = [
     'DumperTar',
 ]
 
-import os, subprocess, shutil, re
+import os, subprocess, shutil, re, threading, itertools
 CMDPIPE = subprocess.PIPE
 
 from mybackup.log import *
@@ -116,18 +116,48 @@ class StrangeParser :
 
     # __init__:
     #
-    def __init__ (self, name, journal) :
+    def __init__ (self, name, journal, rules) :
         self.name = name
         self.journal = journal
+        self.rules = tuple((rname, re.compile("(?P<ALL>"+reg+")"), rcmd, rmsg)
+                           for rname, reg, rcmd, rmsg in rules)
+        # lock it so we can use the same instance for multiple pipes
+        # (not necessary for now, but maybe later)
+        self.lock = threading.Lock()
 
 
+    # match:
+    #
+    def match (self, line) :
+        for rname, reg, rcmd, rmsg in self.rules :
+            m = reg.match(line)
+            if m is None :
+                continue
+            if rmsg :
+                line = rmsg % m.groupdict()
+            return rname, rcmd, line
+        return '<nomatch>', 'strange', line
+
+            
     # __call__:
     #
     def __call__ (self, line) :
         line = line.strip()
         if not line : return
-        #trace("STRANGE:%s: %s" % (self.name, line))
-        self.journal.record('STRANGE', source=self.name, message=line)
+        rname, cmd, line = self.match(line)
+        if cmd == 'discard' :
+            trace("%s: line discarded: '%s'" % (self.name, line))
+        elif cmd == 'strange' :
+            self.journal.record('STRANGE', source=self.name, message=line)
+        elif cmd == 'note' :
+            info("NOTE: %s" % line)
+            self.journal.record('NOTE', message=line)
+        elif cmd == 'warning' :
+            warning(line)
+        elif cmd == 'error' :
+            error(line)
+        else :
+            assert 0, (rname, cmd, line)
 
 
 # DumperTar:

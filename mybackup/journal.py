@@ -98,6 +98,8 @@ class Journal :
         'STRANGE': (('source', 'str'),
                     ('message', 'str')),
 
+        'NOTE': (('message', 'str'),),
+
         'WARNING': (('message', 'str'),),
 
         'ERROR': (('message', 'str'),),

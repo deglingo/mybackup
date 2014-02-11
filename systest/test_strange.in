@@ -32,7 +32,13 @@ test_strange_setup()
   "scripts": {
     "strange-hook": {
       "prog": "./strange-hook",
-      "options": []
+      "options": [],
+      "rules": [
+        ["debug", "^(OUT|ERR):DEBUG:\\\\s*(?P<MSG>.*)\$",   "discard", "strange-hook said: '%(MSG)s'"],
+        ["info",  "^(OUT|ERR):INFO:\\\\s*(?P<MSG>.*)\$",    "note",    "strange-hook said: '%(MSG)s'"],
+        ["warn",  "^(OUT|ERR):WARNING:\\\\s*(?P<MSG>.*)\$", "warning", "strange-hook said: '%(MSG)s'"],
+        ["error", "^(OUT|ERR):ERROR:\\\\s*(?P<MSG>.*)\$",   "error",   "strange-hook said: '%(MSG)s'"]
+      ]
     }
   },
   "disks": {
@@ -50,16 +56,16 @@ EOF
 
 	st_mkfile -m755 "/etc/mybackup/$ST_TEST_NAME/strange-hook" - <<EOF
 #!@SHELL@
-echo "strange-hook-out:DEBUG: YOU SHOULD NOT SEE THIS IN REPORT!"
-echo "strange-hook-out:INFO: some important note here!"
-echo "strange-hook-out:WARNING: some warning"
-echo "strange-hook-out:ERROR: some error"
-echo "strange-hook-out:STRANGE: something's weird, really"
-echo "strange-hook-err:DEBUG: YOU SHOULD NOT SEE THIS IN REPORT!" >&2
-echo "strange-hook-err:INFO: some important note here!" >&2
-echo "strange-hook-err:WARNING: some warning" >&2
-echo "strange-hook-err:ERROR: some error" >&2
-echo "strange-hook-err:STRANGE: something's weird, really" >&2
+echo "OUT:DEBUG: YOU SHOULD NOT SEE THIS IN REPORT!"
+echo "OUT:INFO: some important note here!"
+echo "OUT:WARNING: some warning"
+echo "OUT:ERROR: some error"
+echo "OUT:STRANGE: something's weird, really"
+echo "ERR:DEBUG: YOU SHOULD NOT SEE THIS IN REPORT!" >&2
+echo "ERR:INFO: some important note here!" >&2
+echo "ERR:WARNING: some warning" >&2
+echo "ERR:ERROR: some error" >&2
+echo "ERR:STRANGE: something's weird, really" >&2
 EOF
 }
 

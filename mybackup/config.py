@@ -209,7 +209,7 @@ class CfgDisk :
             proc = cmdexec(cmd, cwd=self.config.cfgdir,
                            stdout=CMDPIPE, stderr=CMDPIPE)
             name = 'hook.%s.%s.%s' % (self.name, trigger, script.name)
-            parser = StrangeParser(name, journal)
+            parser = StrangeParser(name, journal, script.rules)
             pout = PipeThread(name, proc.stdout, (),
                               line_handler=parser, started=True)
             perr = PipeThread(name, proc.stderr, (),
@@ -250,6 +250,7 @@ class CfgScript :
         conf = copy.deepcopy(conf_)
         self.prog = conf.pop('prog')
         self.options = conf.pop('options', [])
+        self.rules = conf.pop('rules', [])
         assert not conf, conf
         # for n, v in dconf.items() :
         #     setattr(self, n, v)
