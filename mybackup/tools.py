@@ -21,11 +21,14 @@ from mybackup.log import *
 
 # cmdexec:
 #
-def cmdexec (cmd, wait=False, check=True, depth=0, **kw) :
+def cmdexec (cmd, wait=False, check=True, lang='', depth=0, **kw) :
     cwd = kw.pop('cwd', None)
     if cwd is None : cwd = os.getcwd()
+    if lang is None : lang = os.environ.get('LANG', '')
+    env = dict(kw.pop('env', os.environ))
+    env['LANG'] = lang
     trace("%s> %s" % (cwd, ' '.join(cmd)), depth=depth+1)
-    proc = subprocess.Popen(cmd, cwd=cwd, **kw)
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env, **kw)
     trace("process %s running with pid %d" %
           (os.path.basename(cmd[0]), proc.pid))
     if not wait :
