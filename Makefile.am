@@ -7,6 +7,7 @@ SUBDIRS = tools bin mybackup docs systest
 
 _VARLIST = \
 	PACKAGE \
+	PACKAGE_TARNAME \
 	PYTHON \
 	PYTHON_VERSION \
 	prefix \
@@ -18,7 +19,9 @@ _VARLIST = \
 	localstatedir \
 	pkglocalstatedir \
 	pythondir \
-	pkgpythondir
+	pkgpythondir \
+	docdir \
+	docexamplesdir
 
 listvars: _listvars
 	sh ./_listvars >&2

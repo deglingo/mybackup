@@ -1,3 +1,3 @@
 #
 
-all-local: mirror
+docexamples_SCRIPTS = mirror

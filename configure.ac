@@ -6,6 +6,7 @@ AM_INIT_AUTOMAKE
 # some default paths
 AC_SUBST([pkgsysconfdir], '${sysconfdir}/${PACKAGE}')
 AC_SUBST([pkglocalstatedir], '${localstatedir}/${PACKAGE}')
+AC_SUBST([docexamplesdir], '${docdir}/examples')
 # [removeme]
 AC_SUBST([vardir], '${localstatedir}')
 AC_SUBST([pkgvardir], '${pkglocalstatedir}')
@@ -87,7 +88,7 @@ AC_CONFIG_FILES([bin/mbdump], [chmod +x bin/mbdump])
 AC_CONFIG_FILES([bin/mbclean], [chmod +x bin/mbclean])
 AC_CONFIG_FILES([bin/mbrun], [chmod +x bin/mbrun])
 AC_CONFIG_FILES([bin/mbui], [chmod +x bin/mbui])
-AC_CONFIG_FILES([docs/examples/mirror])
+AC_CONFIG_FILES([docs/examples/mirror], [chmod +x docs/examples/mirror])
 AC_CONFIG_FILES([systest/mybackup-systest], [chmod +x systest/mybackup-systest])
 AC_CONFIG_FILES([systest/mybackup-systest.conf])
 AC_CONFIG_FILES([systest/mybackup-systest-common])
