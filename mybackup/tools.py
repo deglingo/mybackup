@@ -15,6 +15,7 @@ __all__ = [
 import os, subprocess, shutil, re, threading, itertools
 CMDPIPE = subprocess.PIPE
 
+from mybackup.sysconf import SYSCONF
 from mybackup.log import *
 
 
@@ -166,15 +167,15 @@ class DumperTar :
 
 
     # [FIXME]
-    GNUTAR = os.environ['GNUTAR']
+    GNUTAR = SYSCONF['GNUTAR']
 
     
     # start:
     #
     def start (self, path) :
         cmd = [self.GNUTAR, '--create', '--file', '-',
-               '--directory', path, '.']
-        proc = cmdexec(cmd, stdout=CMDPIPE)
+               '--totals', '--directory', path, '.']
+        proc = cmdexec(cmd, stdout=CMDPIPE, stderr=CMDPIPE)
         return proc
 
 

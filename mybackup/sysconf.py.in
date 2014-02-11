@@ -7,4 +7,5 @@ SYSCONF = types.MappingProxyType({
     'pkgsysconfdir':    '%pkgsysconfdir%',
     'pkglocalstatedir': '%pkglocalstatedir%',
     'pkgvardir':        '%pkgvardir%',
+    'GNUTAR':           '%GNUTAR%',
 })

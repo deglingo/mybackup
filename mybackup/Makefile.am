@@ -25,6 +25,7 @@ sysconf.sed: Makefile
 		echo "s,%pkgsysconfdir%,$(pkgsysconfdir),g"; \
 		echo "s,%pkglocalstatedir%,$(pkglocalstatedir),g"; \
 		echo "s,%pkgvardir%,$(pkgvardir),g"; \
+		echo "s,%GNUTAR%,$(GNUTAR),g"; \
 	) >$@.tmp
 	mv -f $@.tmp $@
 
