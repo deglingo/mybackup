@@ -144,6 +144,7 @@ class CfgDisk :
         self.path = conf.pop('path')
         self.orig = conf.pop('orig', '')
         self.hooks = conf.pop('hooks', [])
+        self.dumpdir = conf.pop('dumpdir', self.name) # [fixme]
         assert not conf, conf
         # [removeme]
         # for n, v in dconf.items() :

@@ -144,15 +144,17 @@ class PostProcess :
             trace("%s: dump not registered, processing" % disk)
             self.__check_dump(disk, dump)
             # record the dump
+            destdir = self.config.disks[disk].dumpdir
             destbase = self.config.disks[disk].get_dumpname(runid=self.runinfo.runid,
                                                             hrs=self.runinfo.start_hrs,
                                                             level=0, # [TODO]
                                                             prevrun=dump.prevrun,
                                                             state=dump.state)
             destext = self.config.disks[disk].get_dumpext()
+            destfull = os.path.join(destdir, destbase+destext)
             try:
                 rec = self.db.record_dump(runid=self.runinfo.runid, disk=disk, state=dump.state,
-                                          prevrun=dump.prevrun, fname=destbase+destext,
+                                          prevrun=dump.prevrun, fname=destfull,
                                           raw_size=dump.raw_size, comp_size=dump.comp_size,
                                           nfiles=dump.nfiles, hashtype=dump.hashtype,
                                           hashsum=dump.hashsum)
@@ -251,6 +253,9 @@ class PostProcess :
         partfile = os.path.join(self.config.partdir, dump.fname)
         destfile = os.path.join(self.config.dumpdir, rec.fname)
         trace("%s: moving dump '%s' -> '%s'" % (disk, partfile, destfile))
+        destdir = os.path.dirname(destfile)
+        if not os.path.isdir(destdir) :
+            mkdir(destdir)
         # check if we have a partfile
         if not os.path.exists(partfile) :
             if not os.path.exists(destfile) :
