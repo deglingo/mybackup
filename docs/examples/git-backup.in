@@ -30,11 +30,19 @@ _cat()
 	done
 }
 
-# _exec NAME [NAME=VALUE...] COMMAND...
+# _exec [-w WD] NAME [NAME=VALUE...] COMMAND...
 _exec()
 {
-	local name="$1"; shift
-	local cmd= pout="$TMPDIR/git.out" perr="$TMPDIR/git.err"
+	local oldpwd="`pwd`" wd="`pwd`" name= cmd= pout="$TMPDIR/git.out" perr="$TMPDIR/git.err"
+	# command line
+	while test $# -gt 0; do
+		case "$1" in
+			-w) wd="$2"; shift 2;;
+			-w*) wd="`echo $1 | cut -c3-`"; shift;;
+			*) name="$1"; shift; break;;
+		esac
+	done
+	# variables
 	while test $# -gt 0; do
 		if echo "$1" | grep -i "^[a-z_][a-z0-9_]*=" >/dev/null; then
 			cmd="${1} ${cmd}"
@@ -43,17 +51,21 @@ _exec()
 			break
 		fi
 	done
+	# command
 	while test $# -gt 0; do
 		cmd="$cmd \"$1\""
 		shift
 	done
-	trace "`pwd`> $cmd"
 	rm -f "$pout" "$perr"
 	mkfifo "$pout" "$perr"
 	_cat 1 "  [$name:--] " <"$pout" &
 	_cat 2 "  [$name:**] " <"$perr" &
-	eval "$cmd" >"$pout" 2>"$perr" && return 0 || return 1
+	cd "$wd"
+	trace "`pwd`> $cmd"
+	local r=0; eval "$cmd" >"$pout" 2>"$perr" || r=$?
+	cd "$oldpwd"
 	wait || warn "some pipe failed! ($cmd)"
+	return $r
 }
 
 # _clone_sync REPO CLONEDIR
@@ -62,15 +74,25 @@ _clone_sync()
 	local repo="$1" clonedir="$2"
 	if test -d "$clonedir"; then
 		trace "updating clone: '$clonedir'"
-		_exec GIT GIT_DIR="$repo" git push --mirror --prune "$clonedir" || {
+		_exec -w"$repo" GIT git fsck --strict --no-progress || {
+			error "$name: fsck failed!";
+			return 1; }
+		_exec -w"$repo" GIT git push --mirror --prune --quiet "$clonedir" || {
 			error "clone update failed: '$repo' -> '$clonedir'";
 			return 1; }
 	else
 		trace "creating new clone: '$clonedir'"
-		_exec GIT GIT_DIR="$repo" git clone --bare --mirror "$clonedir" || {
+		_exec -w"$repo" GIT git clone --bare --mirror --quiet . "$clonedir" || {
 			error "clone creationg failed: '$repo' -> '$clonedir'";
 			return 1; }
 	fi
+	# check and cleanup
+	_exec -w"$repo" GIT git fsck --strict --no-progress || {
+		error "$name: fsck failed! ($?)";
+		return 1; }
+	_exec -w "$repo" GIT git gc --aggressive || {
+		error "$name: gc failed! ($?)";
+		return 1; }
 }
 
 # _dump SOURCE DEST
@@ -79,7 +101,7 @@ _dump()
 	local src="$1" dest="$2"
 	_exec TAR \
 		tar --create --file "$dest" --same-owner --same-permissions \
-		--gzip --one-file-system --sparse --totals \
+		--gzip --one-file-system --sparse \
 		--directory "$src" . || {
 		error "tar failed";
 		return 1; }
@@ -93,8 +115,6 @@ process_repo()
 	local clonedir="$GB_CLONEDIR/$name.git"
 	local stampfile="$GB_STAMPSDIR/$name.stamp.txt"
 	trace "processing '$name' ($repo -> $clonedir)"
-	# create stampdir now to not start anything if it is impossible
-	test -d "$GB_STAMPSDIR" || mkdir -p "$GB_STAMPSDIR"
 	# create/update the clone
 	_clone_sync "$repo" "$clonedir" || {
 		error "$name: clone synchronization failed ($repo -> $clonedir)";
@@ -110,24 +130,23 @@ process_repo()
 	# check dates
 	trace "$name: checking stamps ($last_stamp <> $START_STAMP)"
 	if test x"$last_stamp" = x"$START_STAMP"; then
-		info " - $name $last_stamp $last_head"
+		info "`printf -- '- %-15s %s %s' $name $last_stamp $last_head`"
 		return 0
 	fi
 	# check stamps
 	cur_head="`GIT_DIR="$repo" git log --all --date-order --reverse --format='format:%H' -n1`"
 	trace "$name: checking heads ($last_head <> $cur_head)"
 	if test x"$last_head" = x"$cur_head"; then
-		info " - $name $last_stamp $last_head"
+		info "`printf -- '- %-15s %s %s' $name $last_stamp $last_head`"
 		return 0
 	fi
 	# go
-	infu " U $name $START_STAMP $cur_head"
-	local destbase="git-backup.${name}.${START_STAMP}.${cur_head}"
+	info "`printf '+ %-15s %s %s' $name $START_STAMP $cur_head`"
+	local destbase="${name}.git.${START_STAMP}.${cur_head}"
 	local destext='.tgz'
 	local partfile="${GB_PARTDIR}/${destbase}${destext}.part"
 	local destdir="${GB_DUMPDIR}/${name}"
 	local destfile="${destdir}/${destbase}${destext}"
-	test -d "$GB_PARTDIR" || mkdir -p "$GB_PARTDIR"
 	test -d "$destdir" || mkdir -p "$destdir"
 	trace "$name: dump: '$clonedir' -> '$destfile'"
 	_dump "$clonedir" "$partfile" || return 1
@@ -139,7 +158,6 @@ process_repo()
 	) >"$stamptmp" \
 		&& mv -f "$stamptmp" "$stampfile"
 	sync
-	_exec LS ls -lh "$destfile"
 }
 
 # main
@@ -148,24 +166,32 @@ main()
 	trace "hello!"
 	START_STAMP="`date '+%Y-%m-%d'`"
 	# parse the command line
-	local shortopts='h'
+	local shortopts='d:v:h'
 	local gto='getopt -n git-backup -o "$shortopts" -- "${@}"'
 	local opts="`eval $gto`" || die "getopt failed"
 	eval set -- "$opts"
 	while true; do
 		case "$1" in
 			-h) usage; exit 0;;
+			-d) GB_DUMPDIR="$2"; shift 2;;
+			-v) GB_VARDIR="$2"; shift 2;;
 			--) shift; break;;
 			*) die "oups: arg '$1'"
 		esac
 	done
 	# set defaults
-	: ${GB_CONFIGDIR:=$HOME/.git-backup}
-	: ${GB_CLONEDIR:=$GB_CONFIGDIR/clones}
-	: ${GB_STAMPSDIR:=$GB_CONFIGDIR/stamps}
-	: ${GB_PARTDIR:=$GB_CONFIGDIR/tmp}
-	: ${GB_DUMPDIR:=$GB_CONFIGDIR/dumps}
+	test x"${GB_VARDIR:-}" != x || \
+		die "vardir is missing (-v VARDIR)"
+	: ${GB_VARDIR:=$HOME/.git-backup}
+	: ${GB_CLONEDIR:=$GB_VARDIR/clones}
+	: ${GB_STAMPSDIR:=$GB_VARDIR/stamps}
+	: ${GB_DUMPDIR:=$GB_VARDIR/dumps}
+	: ${GB_PARTDIR:=$GB_DUMPDIR/.partial}
+	# clean and create some dirs
 	test -d "$GB_PARTDIR" && rm -rf "$GB_PARTDIR" || true
+	mkdir -p "$GB_PARTDIR"
+	test -d "$GB_STAMPSDIR" || mkdir -p "$GB_STAMPSDIR"
+	test -d "$GB_CLONEDIR" || mkdir -p "$GB_CLONEDIR"
 	# repo list
 	REPOSITORIES=
 	while test $# -gt 0; do
@@ -186,7 +212,7 @@ main()
 	done
 	# report
 	if test $errs -eq 0; then
-		info "all done!"
+		trace "all done!"
 		exit 0
 	else
 		error "$errs repositories could not be saved:"
