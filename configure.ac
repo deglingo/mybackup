@@ -14,11 +14,11 @@ AC_SUBST([pkgvardir], '${pkglocalstatedir}')
 # [fixme]
 AC_SUBST([GNUTAR])
 AC_MSG_CHECKING([for gnu tar])
-if GNUTAR="`which tar-1.15.1`"; then
+if GNUTAR="`which tar`"; then
 	AC_MSG_RESULT([$GNUTAR])
 else
 	AC_MSG_RESULT([no])
-	AC_ERROR([tar 1.15.1 not found])
+	AC_ERROR([tar not found])
 fi
 
 AC_PROG_LN_S
