@@ -28,7 +28,9 @@ class DB :
                    ('fname', 'text'),
                    ('raw_size', 'int'),
                    ('comp_size', 'int'),
-                   ('nfiles',    'int'))),
+                   ('nfiles',    'int'),
+                   ('hashtype', 'text'),
+                   ('hashsum', 'text'))),
     )
 
 
@@ -138,14 +140,14 @@ class DB :
 
     # record_dump:
     #
-    def record_dump (self, disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles) :
+    def record_dump (self, disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles, hashtype, hashsum) :
         # [FIXME] must be carefull with 'state' because i didn't find
         # a way to automatically 'adapt' it
         state = DumpState.tostr(state)
         self._execute('insert into dumps ' +
-                      '(disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles) ' +
-                      'values (?, ?, ?, ?, ?, ?, ?, ?)',
-                      (disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles))
+                      '(disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles, hashtype, hashsum) ' +
+                      'values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                      (disk, runid, prevrun, state, fname, raw_size, comp_size, nfiles, hashtype, hashsum))
         rec = self.select_dump(runid=runid, disk=disk)
         assert rec is not None, (disk, runid)
         trace("dump recorded: %s" % repr(disk))

@@ -154,7 +154,8 @@ class PostProcess :
                 rec = self.db.record_dump(runid=self.runinfo.runid, disk=disk, state=dump.state,
                                           prevrun=dump.prevrun, fname=destbase+destext,
                                           raw_size=dump.raw_size, comp_size=dump.comp_size,
-                                          nfiles=dump.nfiles)
+                                          nfiles=dump.nfiles, hashtype=dump.hashtype,
+                                          hashsum=dump.hashsum)
             except:
                 error("DUMP: %s" % repr(dump))
                 raise
