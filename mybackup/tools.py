@@ -103,8 +103,8 @@ def sendmail (addrs, subject, body) :
         warning("mailto no set, no mail will be sent")
         return 0
     trace("sending mail to %d address(es)" % len(addrlist))
-    h_content = "Content-Type: text/plain; charset=utf-8"
-    proc = cmdexec([mailer, '-a', h_content, '-s', subject] + addrlist,
+    #h_content = "Content-Type: text/plain; charset=utf-8"
+    proc = cmdexec([mailer, '-s', subject] + addrlist,
                    stdin=CMDPIPE, universal_newlines=True)
     proc.stdin.write(body)
     proc.stdin.close()
