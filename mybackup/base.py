@@ -7,7 +7,7 @@
 # ]
 
 import sys, os, fcntl, time, threading, weakref, re, types, copy
-import codecs, traceback
+import codecs, traceback, hashlib
 from functools import partial
 
 
@@ -58,9 +58,12 @@ class FLock :
 class PipeThread :
 
 
+    hashsum = property(lambda s: s.hasher.hexdigest())
+
+    
     # __init__:
     #
-    def __init__ (self, name, fin, fout, started=False, line_handler=None) :
+    def __init__ (self, name, fin, fout, started=False, line_handler=None, hashtype='') :
         self.name = name
         self.fin = fin
         self.fout = list(fout)
@@ -72,12 +75,23 @@ class PipeThread :
             # [fixme]
             codec = codecs.getincrementaldecoder('utf-8')
             self.decoder = codec(errors='replace')
-
+        self.hashtype = ''
         self.start_lock = threading.Lock() # just in case ?
         self.thread = threading.Thread(target=self.run)
         self.alive = True
         self.started = False
+        self.set_hashtype(hashtype)
         if started : self.start()
+
+
+    # set_hashtype:
+    #
+    def set_hashtype (self, hashtype) :
+        assert not self.started
+        assert not self.hashtype # ?
+        self.hashtype = hashtype
+        if self.hashtype :
+            self.hasher = hash_new(hashtype)
 
 
     # plug_output:
@@ -131,6 +145,8 @@ class PipeThread :
             self.data_size += len(data)
             for f in self.fout :
                 f.write(data)
+            if self.hashtype :
+                self.hasher.update(data)
             if self.line_handler is not None :
                 ldata = self.decoder.decode(data, False)
                 self._process_lines(ldata, False)
@@ -206,6 +222,24 @@ def human_size (s) :
             break
     return (('%d' % s) if i == 0 \
       else ('%.2f' % (s / (1024**i)))) + u
+
+
+# Hashing:
+#
+def hash_new (hashtype) :
+    assert hashtype == 'sha1', hashtype # [todo]
+    return hashlib.sha1()
+    
+def hash_from_file (hashtype, fname) :
+    assert hashtype == 'sha1', hashtype # [todo]
+    h = hashlib.sha1()
+    f = open(fname, 'rb')
+    while True :
+        d = f.read(1<<16)
+        if not d : break
+        h.update(d)
+    f.close()
+    return h.hexdigest()
 
 
 # Dates and time stamps
@@ -467,6 +501,8 @@ class JDumpInfo (_JDumpInfo) :
                             raw_size=-1,
                             comp_size=-1,
                             nfiles=-1,
+                            hashtype='sha1', # [FIXME]
+                            hashsum='',
                             nfixes=0)
     
 
@@ -513,7 +549,9 @@ class JState :
                 runinfo.dumps[ent.disk].update(state=DumpState.tostr(ent.state),
                                                raw_size=ent.raw_size,
                                                comp_size=ent.comp_size,
-                                               nfiles=ent.nfiles)
+                                               nfiles=ent.nfiles,
+                                               hashtype=ent.hashtype,
+                                               hashsum=ent.hashsum)
             elif ent.key == 'USER-MESSAGE' :
                 runinfo.messages.append((ent.level, ent.message))
             elif ent.key == 'END' :

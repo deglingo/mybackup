@@ -328,6 +328,7 @@ class MBDumpApp (mbapp.MBAppBase) :
             pipes.append(data_plug)
         # plug output
         data_plug.plug_output(fdest)
+        data_plug.set_hashtype('sha1') # [FIXME]
         # start all pipes
         for p in pipes :
             p.start()
@@ -355,11 +356,13 @@ class MBDumpApp (mbapp.MBAppBase) :
         raw_size = p_dump.data_size
         comp_size = data_plug.data_size
         nfiles = index.count
+        hashtype = 'sha1' # [FIXME]
+        hashsum = data_plug.hashsum
         # all done
         self.journal.record('DUMP-FINISHED',
                             disk=dsched.disk, state=DumpState.tostr(state),
                             raw_size=raw_size, comp_size=comp_size,
-                            nfiles=nfiles)
+                            nfiles=nfiles, hashtype=hashtype, hashsum=hashsum)
         info("%s: dump finished: %s (%s/%s, %d files)" %
              (cdisk.name, state, human_size(raw_size),
               human_size(comp_size), nfiles))

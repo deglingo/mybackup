@@ -93,7 +93,9 @@ class Journal :
                           ('state', 'dumpstate'),
                           ('raw_size', 'int'),
                           ('comp_size', 'int'),
-                          ('nfiles',    'int')),
+                          ('nfiles',    'int'),
+                          ('hashtype', 'str'),
+                          ('hashsum', 'str')),
 
         'STRANGE': (('source', 'str'),
                     ('message', 'str')),
@@ -115,7 +117,8 @@ class Journal :
         'CLEAN-PANIC': (('message', 'str'),),
 
         'DUMP-FIX': (('disk', 'str'),
-                     ('state', 'dumpstate')),
+                     ('state', 'dumpstate'),
+                     ('hashsum', 'str')),
     }
 
 

@@ -79,9 +79,10 @@ class PostProcess :
 
     # __fix_dump:
     #
-    def __fix_dump (self, disk, state=None) :
+    def __fix_dump (self, disk, state=None, hashsum='') :
         dump = self.runinfo.dumps[disk]
-        kw = {'disk': disk}
+        kw = {'disk': disk,
+              'hashsum': hashsum}
         if state is None :
             kw['state'] = None
         else :
@@ -221,6 +222,20 @@ class PostProcess :
                            % (disk, DumpState.tostr(dump.state), dump.comp_size, st.st_size))
                 state = DumpState.BROKEN
             self.__fix_dump(disk, state=state)
+        # checksum
+        hsum = hash_from_file(dump.hashtype, partfile)
+        if hsum == dump.hashsum :
+            trace("%s: %s ok: %s" % (disk, dump.hashtype, dump.hashsum))
+        else :
+            trace("%s: %s mismatch: %s <> %s" %
+                  (disk, dump.hashtype, hsum, dump.hashsum))
+            if DumpState.cmp(dump.state, 'ok') :
+                self.error("%s: %s mismatch: %s <> %s" %
+                           (disk, dump.hashtype, hsum, dump.hashsum))
+                state = DumpState.BROKEN
+            else :
+                state = DumpState.NONE
+            self.__fix_dump(disk, state=state, hashsum=hsum)
         # what else now ?
 
 
