@@ -6,7 +6,7 @@ __all__ = [
     'cmdexec',
     'mkdir',
     'create_file_nc',
-    'numbered_backup',
+    'backup_file',
     'sendmail',
     'StrangeParser',
     'DumperTar',
@@ -68,30 +68,13 @@ def create_file_nc (dirname, base, ext) :
         return fname
 
 
-# numbered_backup:
+# backup_file:
 #
-def numbered_backup (fname) :
-    tmp = fname + '.tmp'
-    shutil.copyfile(fname, tmp)
-    n = 1
-    r = re.compile(r"^%s\.~(?P<N>[0-9]+)~$" \
-                   % os.path.basename(fname))
-    for f in os.listdir(os.path.dirname(fname)) :
-        m = r.match(f)
-        if m is None :
-            continue
-        n = max(n, int(m.group('N')))
-    while True :
-        bak = fname + '.~%d~' % n
-        try:
-            fd = os.open(bak, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
-        except FileExistsError:
-            n = n + 1
-            continue
-        os.close(fd)
-        os.rename(tmp, bak)
-        trace("backup: '%s' -> '%s'" % (fname, bak))
-        break
+def backup_file (fname) :
+    bakfile = fname + '~'
+    tmpfile = bakfile + 'tmp~'
+    shutil.copyfile(fname, tmpfile)
+    os.rename(tmpfile, bakfile)    
 
 
 # sendmail:

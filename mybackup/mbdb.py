@@ -55,7 +55,8 @@ class DB :
     def __init__ (self, fname) :
         self.fname = fname
         if os.path.exists(fname) :
-            numbered_backup(fname)
+            # [FIXME] should only be done by writer tools
+            backup_file(fname)
         else :
             open(fname, 'wt').close()
         self.con = sqlite3.connect(self.fname, detect_types=sqlite3.PARSE_DECLTYPES)

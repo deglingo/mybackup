@@ -113,6 +113,14 @@ class PostProcess :
         # time to panic now
         if self.panic_count > 0 :
             raise PostProcPanic()
+        # cleanup
+        self.cleanup()
+
+
+    # cleanup:
+    #
+    def cleanup (self) :
+        pass
 
 
     # __run:
