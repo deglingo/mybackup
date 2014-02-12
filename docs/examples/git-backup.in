@@ -1,0 +1,201 @@
+#!@SHELL@
+# -*- shell-script -*-
+
+set -eu
+
+# make sure all messages are in english for the strange parser
+export LANG=
+
+# create a tmpdir
+TMPDIR="`mktemp -d /tmp/git-backup.XXXXXX`"
+trap "rm -rf $TMPDIR" EXIT
+
+# log funcs
+#GB_DEBUG=1
+trace() { test x"${GB_DEBUG:-}" = x || echo "git-backup:DEBUG: $*"; }
+info() { echo "git-backup:INFO: $*"; }
+warn() { echo "git-backup:WARNING: $*" >&2; }
+error() { echo "git-backup:ERROR: $*" >&2; }
+die() { echo "git-backup:ERROR: $* (aborting)"; exit 1; }
+
+
+# _cat FDOUT PREFIX
+_cat()
+{
+	local o="$1" p="$2" k="$TMPDIR/cat.lock" l
+	while read l; do
+		(   flock -n 9 || die "flock failed! ($?)"
+			echo "${p}${l}" >&${o}
+		) 9>"$k"
+	done
+}
+
+# _exec NAME [NAME=VALUE...] COMMAND...
+_exec()
+{
+	local name="$1"; shift
+	local cmd= pout="$TMPDIR/git.out" perr="$TMPDIR/git.err"
+	while test $# -gt 0; do
+		if echo "$1" | grep -i "^[a-z_][a-z0-9_]*=" >/dev/null; then
+			cmd="${1} ${cmd}"
+			shift
+		else
+			break
+		fi
+	done
+	while test $# -gt 0; do
+		cmd="$cmd \"$1\""
+		shift
+	done
+	trace "`pwd`> $cmd"
+	rm -f "$pout" "$perr"
+	mkfifo "$pout" "$perr"
+	_cat 1 "  [$name:--] " <"$pout" &
+	_cat 2 "  [$name:**] " <"$perr" &
+	eval "$cmd" >"$pout" 2>"$perr" && return 0 || return 1
+	wait || warn "some pipe failed! ($cmd)"
+}
+
+# _clone_sync REPO CLONEDIR
+_clone_sync()
+{
+	local repo="$1" clonedir="$2"
+	if test -d "$clonedir"; then
+		trace "updating clone: '$clonedir'"
+		_exec GIT GIT_DIR="$repo" git push --mirror --prune "$clonedir" || {
+			error "clone update failed: '$repo' -> '$clonedir'";
+			return 1; }
+	else
+		trace "creating new clone: '$clonedir'"
+		_exec GIT GIT_DIR="$repo" git clone --bare --mirror "$clonedir" || {
+			error "clone creationg failed: '$repo' -> '$clonedir'";
+			return 1; }
+	fi
+}
+
+# _dump SOURCE DEST
+_dump()
+{
+	local src="$1" dest="$2"
+	_exec TAR \
+		tar --create --file "$dest" --same-owner --same-permissions \
+		--gzip --one-file-system --sparse --totals \
+		--directory "$src" . || {
+		error "tar failed";
+		return 1; }
+}
+
+# process_repo REPO
+process_repo()
+{
+	local repo="$1"
+	local name="`basename $repo .git`"
+	local clonedir="$GB_CLONEDIR/$name.git"
+	local stampfile="$GB_STAMPSDIR/$name.stamp.txt"
+	trace "processing '$name' ($repo -> $clonedir)"
+	# create stampdir now to not start anything if it is impossible
+	test -d "$GB_STAMPSDIR" || mkdir -p "$GB_STAMPSDIR"
+	# create/update the clone
+	_clone_sync "$repo" "$clonedir" || {
+		error "$name: clone synchronization failed ($repo -> $clonedir)";
+		return 1; }
+	# read the stampfile
+	# [FIXME] is there a risk to miss anything here ?
+	local last_stamp= last_head= cur_head
+	if test -e "$stampfile"; then
+		last_stamp="`head -n1 $stampfile | awk '{print $1}'`"
+		last_head="`head -n1 $stampfile | awk '{print $2}'`"
+	fi
+	trace "last dump stamp: '$last_stamp' ($last_head)"
+	# check dates
+	trace "$name: checking stamps ($last_stamp <> $START_STAMP)"
+	if test x"$last_stamp" = x"$START_STAMP"; then
+		info " - $name $last_stamp $last_head"
+		return 0
+	fi
+	# check stamps
+	cur_head="`GIT_DIR="$repo" git log --all --date-order --reverse --format='format:%H' -n1`"
+	trace "$name: checking heads ($last_head <> $cur_head)"
+	if test x"$last_head" = x"$cur_head"; then
+		info " - $name $last_stamp $last_head"
+		return 0
+	fi
+	# go
+	infu " U $name $START_STAMP $cur_head"
+	local destbase="git-backup.${name}.${START_STAMP}.${cur_head}"
+	local destext='.tgz'
+	local partfile="${GB_PARTDIR}/${destbase}${destext}.part"
+	local destdir="${GB_DUMPDIR}/${name}"
+	local destfile="${destdir}/${destbase}${destext}"
+	test -d "$GB_PARTDIR" || mkdir -p "$GB_PARTDIR"
+	test -d "$destdir" || mkdir -p "$destdir"
+	trace "$name: dump: '$clonedir' -> '$destfile'"
+	_dump "$clonedir" "$partfile" || return 1
+	# ok, move the dump file and record it
+	mv -f "$partfile" "$destfile" || return 1
+	local stamptmp="$stampfile.tmp"
+	(   echo "$START_STAMP $cur_head";
+		test -e "$stampfile" && cat "$stampfile" || true;
+	) >"$stamptmp" \
+		&& mv -f "$stamptmp" "$stampfile"
+	sync
+	_exec LS ls -lh "$destfile"
+}
+
+# main
+main()
+{
+	trace "hello!"
+	START_STAMP="`date '+%Y-%m-%d'`"
+	# parse the command line
+	local shortopts='h'
+	local gto='getopt -n git-backup -o "$shortopts" -- "${@}"'
+	local opts="`eval $gto`" || die "getopt failed"
+	eval set -- "$opts"
+	while true; do
+		case "$1" in
+			-h) usage; exit 0;;
+			--) shift; break;;
+			*) die "oups: arg '$1'"
+		esac
+	done
+	# set defaults
+	: ${GB_CONFIGDIR:=$HOME/.git-backup}
+	: ${GB_CLONEDIR:=$GB_CONFIGDIR/clones}
+	: ${GB_STAMPSDIR:=$GB_CONFIGDIR/stamps}
+	: ${GB_PARTDIR:=$GB_CONFIGDIR/tmp}
+	: ${GB_DUMPDIR:=$GB_CONFIGDIR/dumps}
+	test -d "$GB_PARTDIR" && rm -rf "$GB_PARTDIR" || true
+	# repo list
+	REPOSITORIES=
+	while test $# -gt 0; do
+		local l="`echo $1`"
+		test x"$l" != x"$1" || test -e "$l" \
+			|| { warn "'$1' did not match any file"; shift; continue; }
+		test x"$l" = x \
+			&& warn "'$1' did not match any file" \
+			|| REPOSITORIES="$REPOSITORIES $l"
+		shift
+	done
+	test x"$REPOSITORIES" != x || die "nothing to dump"
+	trace "found `echo "$REPOSITORIES" | wc -w` repositories"
+	# go
+	local repo errs=0 errlist=
+	for repo in $REPOSITORIES; do
+		process_repo "$repo" || { errlist="$errlist $repo"; errs=$((errs+1)); }
+	done
+	# report
+	if test $errs -eq 0; then
+		info "all done!"
+		exit 0
+	else
+		error "$errs repositories could not be saved:"
+		for repo in $errlist; do
+			error " - $repo"
+		done
+		exit 1
+	fi
+}
+
+# exec
+main "${@}"

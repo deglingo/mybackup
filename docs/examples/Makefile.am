@@ -1,3 +1,3 @@
 #
 
-docexamples_SCRIPTS = mirror
+docexamples_SCRIPTS = mirror git-backup
