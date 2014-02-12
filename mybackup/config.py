@@ -51,7 +51,7 @@ class Config :
         self.journalfile = os.path.join(self.journaldir, 'journal.txt')
         self.journallock = os.path.join(self.lockdir, '%s.journal.lock' % self.cfgname)
         self.dumpdir = os.path.join(self.cfgvardir, 'dumps')
-        self.partdir = os.path.join(self.dumpdir, 'partial')
+        self.partdir = os.path.join(self.dumpdir, '.partial')
         self.logdir = os.path.join(self.cfgvardir, 'log')
         self.scriptsvardir = os.path.join(self.cfgvardir, 'scripts')
         # read the config file
