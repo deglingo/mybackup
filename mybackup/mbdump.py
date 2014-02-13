@@ -234,12 +234,17 @@ class MBDumpApp (mbapp.MBAppBase) :
     #
     def trigger_hooks (self, trigger, sched) :
         trace("triggering all '%s' hooks" % trigger)
+        aborted = []
         for dump in sched :
             try:
                 dump.cfgdisk.run_hooks(trigger, self.journal)
             except Exception:
                 error("%s: %s hook(s) failed" % (dump.disk, trigger))
                 self.abort_dump(sched, dump)
+                aborted.append(dump)
+        # [FIXME] really not the good way to do that
+        for dump in aborted :
+            sched.remove(dump)
 
 
     # abort_dump:
@@ -248,7 +253,6 @@ class MBDumpApp (mbapp.MBAppBase) :
         self.journal.record('DUMP-ABORT', disk=dump.disk)
         # [FIXME]
         dump.state = DumpState.ABORTED
-        sched.remove(dump)
 
 
     # __schedule_dump:

@@ -9,6 +9,33 @@ trace() { echo "mirror:DEBUG: $*"; }
 error() { echo "mirror:ERROR: $*" >&2; exit 1; }
 die() { echo "mirror:FATAL: $*" >&2; exit 1; }
 
+# _mtab
+_mtab()
+{
+	local e="/^[^/]/d;
+             /^[ ]*$/d;"
+	local f
+    awk '{print $2}' /etc/mtab | sed -e "$e" | while read f; do
+		f="`readlink -e $f`" && test -e "$f" && echo "$f" || true
+	done
+}
+
+# _mount DEV|DIR
+_mount()
+{
+	local dir="$1"
+	if _mtab | grep "^${dir}\$" >/dev/null; then
+		trace "$dir is already mounted"
+	else
+		trace "mounting '$dir'"
+		if mount "$dir"; then
+			trace "OK"
+		else
+			die "could not mount '$dir'"
+		fi
+	fi
+}
+
 trace "MIRROR: $0 $@"
 
 # defaults
@@ -16,8 +43,9 @@ EXCLUDE_FILES=
 CHECK_FILES=
 NTRIES=3
 STAMPFILE=
+MNTDEVS=
 # parse command line
-GTO='getopt -s sh -n mirror -o "n:x:c:s:h" -- "${@}"' \
+GTO='getopt -s sh -n mirror -o "n:x:c:s:m:h" -- "${@}"' \
 	|| die "getopt failed"
 eval set -- "`eval $GTO`"
 while true; do
@@ -27,6 +55,7 @@ while true; do
 		-x) EXCLUDE_FILES="${EXCLUDE_FILES}:${2}"; shift 2;;
 		-c) CHECK_FILES="${CHECK_FILES}:${2}"; shift 2;;
 		-s) STAMPFILE="$2"; shift 2;;
+		-m) MNTDEVS="$MNTDEVS $2"; shift 2;;
 		--) shift; break;;
 		*) die "oups: arg $1"
 	esac
@@ -35,6 +64,11 @@ done
 test $# -eq 2 || die "wrong args number: $@"
 SOURCE="$1"
 DEST="$2"
+# mount
+for DEV in $MNTDEVS; do
+	trace "mounting '$DEV'"
+	_mount "$DEV" || die "could not mount '$DEV'"
+done
 # check stampfile
 if test x"$STAMPFILE" = x; then
 	trace "no stampfile file given, sync forced"
