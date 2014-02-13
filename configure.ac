@@ -69,6 +69,7 @@ AC_SUBST([MB_MODULES_PY], "m4_map_args_w(mb_modules, [], [.py], [ ])")
 m4_define([mb_systest_modules], [ \
   test_base \
   test_run \
+  test_hooks \
   test_strange \
   test_crash \
 ])

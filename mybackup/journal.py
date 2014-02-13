@@ -97,6 +97,8 @@ class Journal :
                           ('hashtype', 'str'),
                           ('hashsum', 'str')),
 
+        'DUMP-ABORT': (('disk', 'str'),),
+
         'STRANGE': (('source', 'str'),
                     ('message', 'str')),
 

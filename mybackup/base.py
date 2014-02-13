@@ -426,7 +426,8 @@ def enum (tpname, fields) :
 _DumpState = enum(
     '_DumpState',
     ('none', 'ok', 'partial', 'failed', 'broken',
-     'selected', 'scheduled', 'started', 'empty'))
+     'selected', 'scheduled', 'started', 'empty',
+    'aborted'))
 
 class DumpState (_DumpState) :
 
@@ -552,6 +553,8 @@ class JState :
                                                nfiles=ent.nfiles,
                                                hashtype=ent.hashtype,
                                                hashsum=ent.hashsum)
+            elif ent.key == 'DUMP-ABORT' :
+                runinfo.dumps[ent.disk].update(state=DumpState.ABORTED)
             elif ent.key == 'USER-MESSAGE' :
                 runinfo.messages.append((ent.level, ent.message))
             elif ent.key == 'END' :

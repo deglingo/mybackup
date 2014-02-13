@@ -170,7 +170,7 @@ class PostProcess :
                 error("DUMP: %s" % repr(dump))
                 raise
         # and do the move
-        if DumpState.cmp(rec.state, 'empty') :
+        if DumpState.cmp(rec.state, 'empty', 'aborted') :
             trace("%s: dump is empty, nothing to move" % disk)
         else :
             self.__process_move(disk, dump, rec)
@@ -180,6 +180,10 @@ class PostProcess :
     #
     def __check_dump (self, disk, dump) :
         cfgdisk = self.config.disks[disk]
+        # skip aborted dumps - [FIXME] check the partfile ?
+        if DumpState.cmp(dump.state, 'aborted') :
+            trace("%s: dump aborted" % disk)
+            return
         # skip those which didn't start
         if not dump.fname :
             trace("%s: dump did not start, check skipped" % disk)

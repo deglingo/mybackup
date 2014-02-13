@@ -219,7 +219,7 @@ class MBDumpApp (mbapp.MBAppBase) :
             self.journal.record('USER-MESSAGE', level=nlvl, message=nmsg)
         self.journal.record('SELECT', disks=','.join(s.disk for s in sched))
         # schedule the dumps
-        self.trigger_hooks('schedule', [d.cfgdisk for d in sched])
+        self.trigger_hooks('schedule', sched)
         for dsched in sched :
             self.__schedule_dump(dsched)
         # run
@@ -232,10 +232,23 @@ class MBDumpApp (mbapp.MBAppBase) :
 
     # trigger_hooks:
     #
-    def trigger_hooks (self, trigger, disklist) :
+    def trigger_hooks (self, trigger, sched) :
         trace("triggering all '%s' hooks" % trigger)
-        for disk in disklist :
-            disk.run_hooks(trigger, self.journal)
+        for dump in sched :
+            try:
+                dump.cfgdisk.run_hooks(trigger, self.journal)
+            except Exception:
+                error("%s: %s hook(s) failed" % (dump.disk, trigger))
+                self.abort_dump(sched, dump)
+
+
+    # abort_dump:
+    #
+    def abort_dump (self, sched, dump) :
+        self.journal.record('DUMP-ABORT', disk=dump.disk)
+        # [FIXME]
+        dump.state = DumpState.ABORTED
+        sched.remove(dump)
 
 
     # __schedule_dump:

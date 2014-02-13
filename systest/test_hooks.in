@@ -1,0 +1,82 @@
+# -*- shell-script -*-
+
+# test_hooks.in - test the hook mechanism
+
+
+# test_hooks_help:
+#
+test_hooks_help()
+{
+	cat <<EOF
+Test all kinds of hooks.
+EOF
+}
+
+
+_fsday1()
+{
+	trace "DAY1: `pwd`"
+	st_mkfile -r. -d "$1" -Rs1M /D1/F1A
+}
+
+
+# test_hooks_setup
+#
+test_hooks_setup()
+{
+	st_setup_fs 1
+
+	# create the config
+	st_mkfile "/etc/mybackup/$ST_TEST_NAME/mybackup.conf" - <<EOF
+{
+  "mailto": "${ST_MAILTO:-}",
+  "scripts": {
+    "hook": {
+      "prog": "./hook",
+      "options": []
+    }
+  },
+  "disks": {
+    "DISK_1": {
+      "path": "$ST_ROOTDIR/fs/D1",
+      "hooks": [{
+        "script": "hook",
+        "options": [],
+        "triggers": "schedule"
+      }]
+    }
+  }
+}
+EOF
+
+	# and the hook
+	st_mkfile -m755 "/etc/mybackup/$ST_TEST_NAME/hook" - <<EOF
+#!@SHELL@
+set -eu
+trace() { echo "hook: \$*"; }
+echo "\$0 \$@"
+#env | sort -k1 -t=
+test \$ST_TEST_HOOKS_EXIT -eq 0 \\
+  && trace "OK" \
+  || trace "ERROR: ouch"
+exit \$ST_TEST_HOOKS_EXIT
+EOF
+}
+
+
+# test_hooks_main
+#
+test_hooks_main()
+{
+	st_switch_fsday 1
+	# success
+	st_switch_date -d1
+	st_mbcheck "$ST_TEST_NAME"
+	st_exec ST_TEST_HOOKS_EXIT=0 \
+		mbdump "$ST_TEST_NAME" -f -n "Simple hooks test [expect SUCCESS]"
+	# failure
+	st_switch_date -d2
+	st_mbcheck "$ST_TEST_NAME"
+	st_exec ST_TEST_HOOKS_EXIT=1 \
+		mbdump "$ST_TEST_NAME" -f -n "Simple hooks test [expect ABORT]"
+}

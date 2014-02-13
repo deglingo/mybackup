@@ -13,6 +13,7 @@ export PATH="$ST_ROOTDIR/usr/bin:/usr/bin:/bin"
 export PYTHONPATH="$ST_ROOTDIR/usr/lib/python@PYTHON_VERSION@/site-packages"
 
 : ${DAY0:='1079/12/31 00:00:00'}
+: ${ST_MBCHECK_OPTS:-}
 : ${ST_MBDUMP_OPTS:-}
 : ${ST_MBCLEAN_OPTS:-}
 
@@ -22,6 +23,7 @@ export PYTHONPATH="$ST_ROOTDIR/usr/lib/python@PYTHON_VERSION@/site-packages"
 st_exec()
 {
 	local shouldfail=0 mark= cmd=
+	trace "st_exec: $@"
 	# check for the '!' mark
 	test x"${1:-}" != x"!" || {
 		shouldfail=1; mark='! '
@@ -46,6 +48,12 @@ st_exec()
 		trace "cmd '$prog' : FAILED ($r)"
 		test $shouldfail -ne 0 || die "command failed: $cmd"
 	fi
+}
+
+st_mbcheck() {
+	test x"${1:-}" = x"!" \
+		&& { shift; st_exec '!' mbcheck ${ST_MBCHECK_OPTS} "${@}"; } \
+		|| { st_exec mbcheck ${ST_MBCHECK_OPTS} "${@}"; }
 }
 
 st_mbdump() {
