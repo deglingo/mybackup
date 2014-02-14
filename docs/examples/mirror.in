@@ -5,8 +5,8 @@ set -eu
 #set -x
 
 # trace
-trace() { echo "mirror:DEBUG: $*"; }
-message() { echo "mirror:INFO: $*"; }
+trace() { echo "mirror:DEBUG: $*" >&2; }
+message() { echo "mirror:INFO: $*" >&2; }
 error() { echo "mirror:ERROR: $*" >&2; exit 1; }
 die() { echo "mirror:FATAL: $*" >&2; exit 1; }
 
