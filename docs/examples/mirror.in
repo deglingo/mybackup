@@ -10,8 +10,6 @@ message() { echo "mirror:INFO: $*" >&2; }
 error() { echo "mirror:ERROR: $*" >&2; exit 1; }
 die() { echo "mirror:FATAL: $*" >&2; exit 1; }
 
-info "MIRROR: $0 $@"
-
 # _ismounted DIR
 _ismounted()
 {
@@ -125,44 +123,51 @@ process_main()
 			&& mv -f "$STAMPFILE.tmp" "$STAMPFILE"; }
 }
 
-# defaults
-EXCLUDE_FILES=
-CHECK_FILES=
-NTRIES=3
-STAMPFILE=
-ROMOUNT=
-RWMOUNT=
-# parse command line
-GTO='getopt -s sh -n mirror -o "n:x:c:s:r:w:h" -- "${@}"' \
-	|| die "getopt failed"
-eval set -- "`eval $GTO`"
-while true; do
-	case "$1" in
-		-h) usage; exit 0;;
-		-n) NTRIES="$2"; shift 2;;
-		-x) EXCLUDE_FILES="${EXCLUDE_FILES}:${2}"; shift 2;;
-		-c) CHECK_FILES="${CHECK_FILES}:${2}"; shift 2;;
-		-s) STAMPFILE="$2"; shift 2;;
-		-r) ROMOUNT="$2"; shift 2;;
-		-w) RWMOUNT="$2"; shift 2;;
-		--) shift; break;;
-		*) die "oups: arg $1"
-	esac
-done
-# arguments
-test $# -eq 2 || die "wrong args number: $@"
-SOURCE="$1"
-DEST="$2"
-# mount ro/rw devices
-process_mount || die "mount(s) failed"
-# do the job
-RMAIN=0
-( process_main; ) || RMAIN=$?
-sync
-# umount rw
-process_umount || true
-# report
-test $RMAIN -eq 0 \
-	&& trace "all done!" \
-	|| error "failed!"
-exit $RMAIN
+# main()
+{
+	message "MIRROR: $0 $@"
+	# defaults
+	EXCLUDE_FILES=
+	CHECK_FILES=
+	NTRIES=3
+	STAMPFILE=
+	ROMOUNT=
+	RWMOUNT=
+	# parse command line
+	GTO='getopt -s sh -n mirror -o "n:x:c:s:r:w:h" -- "${@}"' \
+		|| die "getopt failed"
+	eval set -- "`eval $GTO`"
+	while true; do
+		case "$1" in
+			-h) usage; exit 0;;
+			-n) NTRIES="$2"; shift 2;;
+			-x) EXCLUDE_FILES="${EXCLUDE_FILES}:${2}"; shift 2;;
+			-c) CHECK_FILES="${CHECK_FILES}:${2}"; shift 2;;
+			-s) STAMPFILE="$2"; shift 2;;
+			-r) ROMOUNT="$2"; shift 2;;
+			-w) RWMOUNT="$2"; shift 2;;
+			--) shift; break;;
+			*) die "oups: arg $1"
+		esac
+	done
+	# arguments
+	test $# -eq 2 || die "wrong args number: $@"
+	SOURCE="$1"
+	DEST="$2"
+	# mount ro/rw devices
+	process_mount || die "mount(s) failed"
+	# do the job
+	RMAIN=0
+	( process_main; ) || RMAIN=$?
+	sync
+	# umount rw
+	process_umount || true
+	# report
+	test $RMAIN -eq 0 \
+		&& trace "all done!" \
+		|| error "failed!"
+	exit $RMAIN
+}
+
+# exec
+main "${@}"
