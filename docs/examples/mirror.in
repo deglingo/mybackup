@@ -33,43 +33,29 @@ process_mount()
 	# unmounted while RWMOUNT is still up)
 	if _ismounted "$RWMOUNT"; then
 		message "umount '$RWMOUNT'"
-		if ! umount "$RWMOUNT"; then
-			error "could not unmount '$RWMOUNT', trying lazy mode"
-			if ! umount -l "$RWMOUNT"; then
-				die "could not unmount '$RWMOUNT'"
-			fi
-		fi
+		umount "$RWMOUNT" || {
+			error "could not unmount '$RWMOUNT', trying lazy mode";
+			umount -l "$RWMOUNT" || {
+				error "could not unmount '$RWMOUNT'";
+				return 1; }; }
 	fi
 	# 2. mount ROMOUNT if needed
 	if ! _ismounted "$ROMOUNT"; then
 		message "mount '$ROMOUNT'"
-		if ! mount "$ROMOUNT"; then
-			die "could not mount '$ROMOUNT'"
-		fi
+		mount "$ROMOUNT" || {
+			error "could not mount '$ROMOUNT'";
+			return 1; }
 	fi
 	# 3. bind RWMOUNT and make it writable
 	message "mount --bind '$ROMOUNT' '$RWMOUNT'"
-	mount --bind "$ROMOUNT" "$RWMOUNT" \
-		|| die "could not bind '$RWMOUNT'"
+	mount --bind "$ROMOUNT" "$RWMOUNT" || {
+		error "could not bind '$RWMOUNT'";
+		return 1; }
 	message "mount -oremount,rw '$RWMOUNT'"
-	mount -oremount,rw "$RWMOUNT" \
-		|| die "could not set rw on '$RWMOUNT'"
-}
-
-# process_umount
-process_umount()
-{
-	# ?
-	if _ismounted "$RWMOUNT"; then
-		message "umount '$RWMOUNT'"
-		if ! umount "$RWMOUNT"; then
-			error "could not unmount '$RWMOUNT', trying lazy mode"
-			if ! umount -l "$RWMOUNT"; then
-				error "could not unmount '$RWMOUNT'"
-				return 1
-			fi
-		fi
-	fi
+	mount -oremount,rw "$RWMOUNT" || {
+		error "could not set rw on '$RWMOUNT'";
+		return 1; }
+	return 0
 }
 
 # process_main
