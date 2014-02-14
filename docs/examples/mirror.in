@@ -10,7 +10,7 @@ message() { echo "mirror:INFO: $*" >&2; }
 error() { echo "mirror:ERROR: $*" >&2; exit 1; }
 die() { echo "mirror:FATAL: $*" >&2; exit 1; }
 
-trace "MIRROR: $0 $@"
+info "MIRROR: $0 $@"
 
 # _ismounted DIR
 _ismounted()
@@ -56,6 +56,12 @@ process_mount()
 		error "could not set rw on '$RWMOUNT'";
 		return 1; }
 	return 0
+}
+
+# process_umount
+process_umount()
+{
+	message "[TODO] umount"
 }
 
 # process_main
