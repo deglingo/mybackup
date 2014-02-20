@@ -189,6 +189,13 @@ class MBDumpApp (mbapp.MBAppBase) :
                         error("%s: last dump is in the future!!" % disk.name)
                         error("%s: I prefer to skip this dump, use -f to force selection" % disk.name)
                         continue
+                    elif not DumpState.cmp('ok') :
+                        if check_delay(self.config.retry_delay, hrs2stamp(hrs), hrs2stamp(self.config.start_hrs)) :
+                            trace("%s: last dump failed, retrying" % disk)
+                        else :
+                            trace("%s: last dump failed, will retry in %s" %
+                                  (disk.name, self.config.retry_delay))
+                            continue
                     elif hrs[:8] < self.config.start_hrs[:8] :
                         trace("%s: last dump older than 1 day, selected" % disk.name)
                     else :

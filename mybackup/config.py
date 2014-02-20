@@ -74,6 +74,7 @@ class Config :
         conf = copy.deepcopy(conf_)
         self.mailto = conf.pop('mailto', '')
         self.check_file = conf.pop('check_file', '')
+        self.retry_delay = conf.pop('retry_delay', '1d')
         self.report_columns = tuple(conf.pop('report_columns',
                                        (r'\title=DISK\%(disk)s',
                                         r'\title=STATE\center\%(upstate)s',

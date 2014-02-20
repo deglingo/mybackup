@@ -11,6 +11,16 @@ import codecs, traceback, hashlib
 from functools import partial
 
 
+# RE_DELAY:
+#
+# Matches a 'delay' parameter.
+#
+RE_DELAY = re.compile(r"""^
+^(?P<NUM>[0-9]+)\s*       # number
+((?P<DAYS>d|day|days))\s* # unit
+$""", re.VERBOSE | re.IGNORECASE)
+
+
 # FLockError:
 #
 class FLockError (Exception) :
@@ -303,6 +313,34 @@ def hrs2date (hrs) :
       (hrs[0:4], hrs[4:6], hrs[6:8],
        hrs[8:10], hrs[10:12], hrs[12:14])
     return check_date(d)
+
+
+# hrs2stamp:
+#
+def hrs2stamp (hrs) :
+    check_hrs(hrs)
+    return check_stamp(date2stamp(hrs2date(hrs)))
+
+
+# check_delay:
+#
+# Check if a given 'delay' has elapsed between two dates. Return True
+# if the delay has been reached. [FIXME] Only accepts stamps for now.
+#
+def check_delay (delay, stamp1, stamp2) :
+    assert check_stamp(stamp1)
+    assert check_stamp(stamp2)
+    assert stamp2 >= stamp1 # ?
+    m = RE_DELAY.match(delay)
+    num = int(m.group('NUM'))
+    if m.group('DAYS') :
+        t1 = time.localtime(stamp1)
+        t2 = time.localtime(stamp2)
+        s1 = time.mktime((t1.tm_year, t1.tm_mon, t1.tm_mday, 0, 0, 0, 0, 0, -1))
+        s2 = time.mktime((t2.tm_year, t2.tm_mon, t2.tm_mday, 0, 0, 0, 0, 0, -1))
+        return (s2 - s1) >= (num * 86400)
+    else :
+        assert 0, (delay, m.groupdict())
 
 
 # attrdict:
