@@ -19,6 +19,7 @@ test_crash_setup()
 	st_mkfile "/etc/mybackup/$ST_TEST_NAME/mybackup.conf" - <<EOF
 {
   "mailto": "${ST_MAILTO:-}",
+  "check_file": "$ST_ROOTDIR/fs/CHECK_FILE",
   "scripts": {
     "KILLER": {
       "prog": "./killer",
@@ -69,6 +70,10 @@ test_crash_main()
 	st_switch_fsday 1
 	# first make sure mbclean succeeds in a clean env
 	st_mbclean $ST_TEST_NAME
+	# first try without the check-file (should refuse to start)
+	st_exec '!' mbdump -f $ST_TEST_NAME -n "[expect error: check_file not found]"
+	st_exec mbclean $ST_TEST_NAME
+	echo >"$ST_ROOTDIR/fs/CHECK_FILE"
 	# this one should work
 	st_switch_date -d1 -h2
 	st_mbdump -f $ST_TEST_NAME

@@ -73,6 +73,7 @@ class Config :
     def configure (self, conf_) :
         conf = copy.deepcopy(conf_)
         self.mailto = conf.pop('mailto', '')
+        self.check_file = conf.pop('check_file', '')
         self.report_columns = tuple(conf.pop('report_columns',
                                        (r'\title=DISK\%(disk)s',
                                         r'\title=STATE\center\%(upstate)s',

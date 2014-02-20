@@ -218,6 +218,10 @@ class MBDumpApp (mbapp.MBAppBase) :
         for nlvl, nmsg in self.config.user_notes :
             self.journal.record('USER-MESSAGE', level=nlvl, message=nmsg)
         self.journal.record('SELECT', disks=','.join(s.disk for s in sched))
+        # check the 'check_file'
+        if self.config.check_file and not os.path.exists(self.config.check_file) :
+            error("check_file not found: '%s'" % self.config.check_file)
+            sys.exit(1) # [FIXME]
         # schedule the dumps
         self.trigger_hooks('schedule', sched)
         for dsched in sched :
