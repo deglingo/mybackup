@@ -176,12 +176,12 @@ class MBDumpApp (mbapp.MBAppBase) :
         sched = []
         for disk in disklist :
             if self.config.force :
-                trace("%s: force flag set, selected" % disk.name)
+                info("%s: force flag set, selected" % disk.name)
             else :
                 dump = self.db.select_last_dump(disk.name)
                 trace("%s: %s" % (disk.name, dump))
                 if dump is None :
-                    trace("%s: no last dump found, selected" % disk)
+                    info("%s: no last dump found, selected" % disk)
                 else :
                     hrs = self.db.select_run(dump.runid).hrs
                     # [TODO]
@@ -189,17 +189,18 @@ class MBDumpApp (mbapp.MBAppBase) :
                         error("%s: last dump is in the future!!" % disk.name)
                         error("%s: I prefer to skip this dump, use -f to force selection" % disk.name)
                         continue
-                    elif not DumpState.cmp('ok') :
+                    elif not DumpState.cmp(dump.state, 'ok') :
                         if check_delay(self.config.retry_delay, hrs2stamp(hrs), hrs2stamp(self.config.start_hrs)) :
-                            trace("%s: last dump failed, retrying" % disk)
+                            info("%s: last dump failed, retrying" % disk)
                         else :
-                            trace("%s: last dump failed, will retry in %s" %
+                            info("%s: last dump failed, will retry in %s" %
                                   (disk.name, self.config.retry_delay))
                             continue
-                    elif hrs[:8] < self.config.start_hrs[:8] :
-                        trace("%s: last dump older than 1 day, selected" % disk.name)
+                    elif check_delay(self.config.dump_delay, hrs2stamp(hrs), hrs2stamp(self.config.start_hrs)) :
+                        info("%s: last dump older than %s, selected" %
+                              (disk.name, self.config.dump_delay))
                     else :
-                        trace("%s: up to date, skipped" % disk.name)
+                        info("%s: up to date, skipped" % disk.name)
                         continue
             sched.append(DumpSched(disk=disk.name, cfgdisk=disk))
         return sched

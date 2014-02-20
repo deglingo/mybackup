@@ -23,7 +23,7 @@ export PYTHONPATH="$ST_ROOTDIR/usr/lib/python@PYTHON_VERSION@/site-packages"
 st_exec()
 {
 	local shouldfail=0 mark= cmd=
-	trace "st_exec: $@"
+	#trace "st_exec: $@"
 	# check for the '!' mark
 	test x"${1:-}" != x"!" || {
 		shouldfail=1; mark='! '
@@ -39,7 +39,9 @@ st_exec()
 		cmd="$cmd \"$1\""
 		shift
 	done
-	info "${mark}${cmd}"
+	info "`fill -f'+' ''`"
+	info "# ${mark}${cmd}"
+	info "`fill -f'+' ''`"
 	local r=0; eval "$cmd" || r=$?
 	if [ $r -eq 0 ]; then
 		trace "cmd '$prog' : OK"

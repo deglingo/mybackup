@@ -336,8 +336,8 @@ def check_delay (delay, stamp1, stamp2) :
     if m.group('DAYS') :
         t1 = time.localtime(stamp1)
         t2 = time.localtime(stamp2)
-        s1 = time.mktime((t1.tm_year, t1.tm_mon, t1.tm_mday, 0, 0, 0, 0, 0, -1))
-        s2 = time.mktime((t2.tm_year, t2.tm_mon, t2.tm_mday, 0, 0, 0, 0, 0, -1))
+        s1 = int(time.mktime((t1.tm_year, t1.tm_mon, t1.tm_mday, 0, 0, 0, 0, 0, -1)))
+        s2 = int(time.mktime((t2.tm_year, t2.tm_mon, t2.tm_mday, 0, 0, 0, 0, 0, -1)))
         return (s2 - s1) >= (num * 86400)
     else :
         assert 0, (delay, m.groupdict())
