@@ -79,7 +79,13 @@ def backup_file (fname) :
 
 # sendmail:
 #
-def sendmail (addrs, subject, body) :
+def sendmail (addrs, subject, body, maxsize=50) :
+    maxbytes = maxsize * 1024
+    if len(body) > maxbytes :
+        body = body[:maxbytes]
+        truncated = True
+    else :
+        truncated = False
     mailer = 'Mail' # [fixme]
     addrlist = [a for a in addrs.split(':') if a]
     if not addrlist :
@@ -90,6 +96,8 @@ def sendmail (addrs, subject, body) :
     proc = cmdexec([mailer, '-s', subject] + addrlist,
                    stdin=CMDPIPE, universal_newlines=True)
     proc.stdin.write(body)
+    if truncated :
+        proc.stdin.write("\n!! MAIL TOO LONG, TRUNCATED TO %dKb !!\n" % maxsize)
     proc.stdin.close()
     r = proc.wait()
     if r != 0 :
