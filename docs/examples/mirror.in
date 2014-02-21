@@ -12,69 +12,42 @@ die() { echo "mirror:FATAL: $*" >&2; exit 1; }
 
 trace "MIRROR: $0 $@"
 
-# _ismounted DIR
-_ismounted()
+# check_stampfile
+# (success if update is needed)
+check_stampfile()
 {
-	local dir="`readlink -e $1`" && test -d "$dir" \
-		|| die "_ismounted: invalid dir: '$1'"
-	local dir2
-	for dir2 in `awk '{print $2}' /etc/mtab`; do
-		dir2="`readlink -e $dir2`" && test -d "$dir2" \
-			|| continue
-		test x"$dir" != x"$dir2" || return 0
-	done
-	return 1
-}
-
-# process_mount
-process_mount()
-{
-	# 1. unmount RWMOUNT (weird things can happen if ROMOUNT is
-	# unmounted while RWMOUNT is still up)
-	if _ismounted "$RWMOUNT"; then
-		message "umount '$RWMOUNT'"
-		umount "$RWMOUNT" || {
-			error "could not unmount '$RWMOUNT', trying lazy mode";
-			umount -l "$RWMOUNT" || {
-				error "could not unmount '$RWMOUNT'";
-				return 1; }; }
+	# no stampfile given: always run
+	test x"$STAMPFILE" != x || {
+		trace "no stampfile file given, sync forced";
+		return 0; }
+	# stampfile does not exist yet: run
+	test -e "$STAMPFILE" || {
+		trace "stampfile not found, sync force";
+		return 0; }
+	# read it
+	LAST_DATE="`cat $STAMPFILE`"
+	LAST_STAMP="`date -d \"$LAST_DATE\" '+%s'`"
+	trace "stamps (old/new) : $LAST_DATE/$START_DATE ($LAST_STAMP/$START_STAMP)"
+	if [ $LAST_STAMP -gt $START_STAMP ]; then
+		error "last stamp is in the future! ($LAST_DATE > $START_DATE)"
+		# [FIXME] what to do now ?
+		return 1
+	elif [ $((START_STAMP - LAST_STAMP)) -ge $((DELAY * 86400)) ]; then
+		trace "mirror needs update"
+		return 0
+	else
+		trace "mirror is up to date"
+		return 1
 	fi
-	# 2. mount ROMOUNT if needed
-	if ! _ismounted "$ROMOUNT"; then
-		message "mount '$ROMOUNT'"
-		mount "$ROMOUNT" || {
-			error "could not mount '$ROMOUNT'";
-			return 1; }
-	fi
-	# 3. bind RWMOUNT and make it writable
-	message "mount --bind '$ROMOUNT' '$RWMOUNT'"
-	mount --bind "$ROMOUNT" "$RWMOUNT" || {
-		error "could not bind '$RWMOUNT'";
-		return 1; }
-	message "mount -oremount,rw '$RWMOUNT'"
-	mount -oremount,rw "$RWMOUNT" || {
-		error "could not set rw on '$RWMOUNT'";
-		return 1; }
-	return 0
 }
 
 # process_main
 process_main()
 {
-	# check stampfile
-	if test x"$STAMPFILE" = x; then
-		trace "no stampfile file given, sync forced"
-	else
-		test -e "$STAMPFILE" && OLDSTAMP="`cat $STAMPFILE`" || OLDSTAMP='X'
-		NEWSTAMP="`date '+%Y-%m-%d'`"
-		trace "stamps (old/new) : $OLDSTAMP/$NEWSTAMP"
-		if test x"$OLDSTAMP" = x"$NEWSTAMP"; then
-			trace "sync up to date, bye"
-			exit 0
-		else
-			trace "stamp mismatch, sync will be run"
-		fi
-	fi
+	START_DATE="`date '+%Y-%m-%d'`"
+	START_STAMP="`date -d \"$START_DATE\" '+%s'`"
+	# check the stampfile
+	check_stampfile || return 0
 	# check files
 	L="$CHECK_FILES"
 	while test x"$L" != x; do
@@ -115,7 +88,7 @@ process_main()
 	# update stampfile
 	trace "updating stampfile: \`$STAMPFILE'"
 	test x"$STAMPFILE" = x || {
-		echo "$NEWSTAMP" >"$STAMPFILE.tmp" \
+		echo "$START_STAMP" >"$STAMPFILE.tmp" \
 			&& mv -f "$STAMPFILE.tmp" "$STAMPFILE"; }
 }
 
@@ -124,10 +97,9 @@ EXCLUDE_FILES=
 CHECK_FILES=
 NTRIES=3
 STAMPFILE=
-ROMOUNT=
-RWMOUNT=
+DELAY=1
 # parse command line
-GTO='getopt -s sh -n mirror -o "n:x:c:s:r:w:h" -- "${@}"' \
+GTO='getopt -s sh -n mirror -o "n:x:c:s:d:h" -- "${@}"' \
 	|| die "getopt failed"
 eval set -- "`eval $GTO`"
 while true; do
@@ -137,8 +109,7 @@ while true; do
 		-x) EXCLUDE_FILES="${EXCLUDE_FILES}:${2}"; shift 2;;
 		-c) CHECK_FILES="${CHECK_FILES}:${2}"; shift 2;;
 		-s) STAMPFILE="$2"; shift 2;;
-		-r) ROMOUNT="$2"; shift 2;;
-		-w) RWMOUNT="$2"; shift 2;;
+		-d) DELAY="$2"; shift 2;;
 		--) shift; break;;
 		*) die "oups: arg $1"
 	esac
@@ -147,14 +118,9 @@ done
 test $# -eq 2 || die "wrong args number: $@"
 SOURCE="$1"
 DEST="$2"
-# mount ro/rw devices
-process_mount || die "mount(s) failed"
-# do the job
-RMAIN=0
-( process_main; ) || RMAIN=$?
+# go
+R=0; process_main || RMAIN=?
 sync
-# umount rw
-process_umount || true
 # report
 test $RMAIN -eq 0 \
 	&& trace "all done!" \
