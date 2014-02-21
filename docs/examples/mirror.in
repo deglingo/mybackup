@@ -46,6 +46,7 @@ process_main()
 {
 	START_DATE="`date '+%Y-%m-%d'`"
 	START_STAMP="`date -d \"$START_DATE\" '+%s'`"
+	trace "started at '$START_DATE' ($START_STAMP)"
 	# check the stampfile
 	check_stampfile || return 0
 	# check files
@@ -88,7 +89,7 @@ process_main()
 	# update stampfile
 	trace "updating stampfile: \`$STAMPFILE'"
 	test x"$STAMPFILE" = x || {
-		echo "$START_STAMP" >"$STAMPFILE.tmp" \
+		echo "$START_DATE" >"$STAMPFILE.tmp" \
 			&& mv -f "$STAMPFILE.tmp" "$STAMPFILE"; }
 }
 
@@ -119,7 +120,7 @@ test $# -eq 2 || die "wrong args number: $@"
 SOURCE="$1"
 DEST="$2"
 # go
-R=0; process_main || RMAIN=?
+RMAIN=0; process_main || RMAIN=?
 sync
 # report
 test $RMAIN -eq 0 \
